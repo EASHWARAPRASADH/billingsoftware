@@ -1,4 +1,3 @@
-import { API } from "@/App";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import axios from "axios";
+import { useAuth } from "@/contexts/AuthContext";
+import { expenseService } from "@/services/expenseService";
 import { Edit, Plus, Receipt, Search, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -66,9 +66,22 @@ export default function Expenses() {
 
   const fetchExpenses = async () => {
     try {
-      const response = await axios.get(`${API}/expenses`);
-      setExpenses(response.data);
+      const { data, error } = await expenseService.getAll();
+      if (error) throw error;
+
+      const mappedExpenses = (data || []).map(exp => ({
+        id: exp.id,
+        category: exp.category,
+        amount: exp.amount,
+        description: exp.description,
+        expenseDate: exp.expense_date,
+        receiptUrl: exp.receipt_url,
+        createdAt: exp.created_at
+      }));
+
+      setExpenses(mappedExpenses);
     } catch (error) {
+      console.error("Fetch expenses error:", error);
       toast.error("Failed to load expenses");
     } finally {
       setLoading(false);
@@ -78,16 +91,22 @@ export default function Expenses() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Map UI fields to DB fields
       const payload = {
-        ...formData,
-        amount: parseFloat(formData.amount)
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        description: formData.description,
+        expense_date: formData.expenseDate,
+        receipt_url: formData.receiptUrl
       };
 
       if (editingExpense) {
-        await axios.put(`${API}/expenses/${editingExpense.id}`, payload);
+        const { error } = await expenseService.update(editingExpense.id, payload);
+        if (error) throw error;
         toast.success("Expense updated successfully");
       } else {
-        await axios.post(`${API}/expenses`, payload);
+        const { error } = await expenseService.create(payload);
+        if (error) throw error;
         toast.success("Expense added successfully");
       }
 
@@ -95,7 +114,8 @@ export default function Expenses() {
       resetForm();
       fetchExpenses();
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to save expense");
+      console.error("Save expense error:", error);
+      toast.error("Failed to save expense");
     }
   };
 
@@ -105,7 +125,7 @@ export default function Expenses() {
       category: expense.category,
       amount: expense.amount.toString(),
       description: expense.description,
-      expenseDate: expense.expenseDate,
+      expenseDate: expense.expenseDate, // Already mapped in fetch
       receiptUrl: expense.receiptUrl || ""
     });
     setIsDialogOpen(true);
@@ -113,10 +133,12 @@ export default function Expenses() {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${API}/expenses/${id}`);
+      const { error } = await expenseService.delete(id);
+      if (error) throw error;
       toast.success("Expense deleted successfully");
       fetchExpenses();
     } catch (error) {
+      console.error("Delete expense error:", error);
       toast.error("Failed to delete expense");
     }
   };
@@ -133,8 +155,8 @@ export default function Expenses() {
   };
 
   const filteredExpenses = expenses.filter((expense) =>
-    expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    expense.category.toLowerCase().includes(searchTerm.toLowerCase())
+    (expense.description || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (expense.category || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
@@ -256,11 +278,12 @@ export default function Expenses() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
               data-testid="search-expenses-input"
+              data-value={searchTerm}
             />
           </div>
           <div className="text-right">
             <p className="text-sm text-gray-600">Total Expenses</p>
-            <p className="text-2xl font-bold text-gray-800" data-testid="total-expenses-display">₹{totalExpenses.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-gray-800" data-testid="total-expenses-display">{currencySymbol}{totalExpenses.toFixed(2)}</p>
           </div>
         </div>
       </div>
@@ -293,7 +316,7 @@ export default function Expenses() {
                   <p className="font-semibold text-gray-800">{expense.description}</p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <p className="text-xl font-bold text-gray-800">₹{parseFloat(expense.amount).toFixed(2)}</p>
+                  <p className="text-xl font-bold text-gray-800">{currencySymbol}{parseFloat(expense.amount).toFixed(2)}</p>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)} data-testid={`edit-expense-${expense.id}-btn`}>
                       <Edit size={16} className="text-blue-500" />

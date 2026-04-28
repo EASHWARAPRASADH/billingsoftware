@@ -1,27 +1,120 @@
-import { API } from "@/App";
-import axios from "axios";
+import { expenseService } from "@/services/expenseService";
+import { invoiceService } from "@/services/invoiceService";
 import { ArrowRight, Calendar, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 export default function Dashboard() {
+  const { currencySymbol } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD format
+  const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState("all");
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchDashboard = async () => {
     try {
-      const response = await axios.get(`${API}/dashboard`);
-      setStats(response.data);
+      const [invoicesRes, expensesRes] = await Promise.all([
+        invoiceService.getAll(),
+        expenseService.getAll()
+      ]);
+
+      if (invoicesRes.error) throw invoicesRes.error;
+      if (expensesRes.error) throw expensesRes.error;
+
+      const invoices = invoicesRes.data || [];
+      const expenses = expensesRes.data || [];
+
+      console.log(`Filtering for range: ${startDate} to ${endDate}`);
+      console.log(`Found ${invoices.length} total invoices, ${expenses.length} total expenses`);
+
+      // Filter by date range (robust check)
+      const filteredInvoices = invoices.filter(inv => {
+        const date = (inv.invoice_date || "").split(' ')[0]; // Handle YYYY-MM-DD or YYYY-MM-DD HH:mm:ss
+        const isMatch = date >= startDate && date <= endDate;
+        return isMatch;
+      });
+
+      const filteredExpenses = expenses.filter(exp => {
+        const date = (exp.expense_date || "").split(' ')[0];
+        const isMatch = date >= startDate && date <= endDate;
+        return isMatch;
+      });
+
+      console.log(`Filtered: ${filteredInvoices.length} invoices, ${filteredExpenses.length} expenses`);
+
+      // Calculate stats
+      const totalRevenue = filteredInvoices
+        .filter(inv => inv.status === 'paid')
+        .reduce((sum, inv) => sum + (Number(inv.total_amount) || 0), 0);
+
+      const totalExpenses = filteredExpenses
+        .reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+
+      const paidInvoicesCount = filteredInvoices.filter(inv => inv.status === 'paid').length;
+
+      // Calculate Monthly Data for Chart
+      const monthMap = {};
+      filteredInvoices.forEach(inv => {
+        const date = new Date(inv.invoice_date);
+        const month = date.toLocaleString('default', { month: 'short' });
+        const year = date.getFullYear();
+        const key = `${month} ${year}`;
+        if (!monthMap[key]) monthMap[key] = { name: key, revenue: 0, expenses: 0 };
+        if (inv.status === 'paid') {
+          monthMap[key].revenue += Number(inv.total_amount) || 0;
+        }
+      });
+
+      filteredExpenses.forEach(exp => {
+        const date = new Date(exp.expense_date);
+        const month = date.toLocaleString('default', { month: 'short' });
+        const year = date.getFullYear();
+        const key = `${month} ${year}`;
+        if (!monthMap[key]) monthMap[key] = { name: key, revenue: 0, expenses: 0 };
+        monthMap[key].expenses += Number(exp.amount) || 0;
+      });
+
+      const chartData = Object.values(monthMap).sort((a, b) => {
+        const dateA = new Date(a.name);
+        const dateB = new Date(b.name);
+        return dateA - dateB;
+      });
+
+      setMonthlyData(chartData);
+
+      setStats({
+        totalRevenue,
+        totalExpenses,
+        recentInvoices: filteredInvoices.map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          clientName: inv.client_name,
+          total: inv.total_amount,
+          status: inv.status,
+          createdAt: inv.created_at || inv.createdAt,
+          issueDate: inv.invoice_date,
+          dueDate: inv.due_date
+        })),
+        paidInvoices: paidInvoicesCount,
+        totalInvoices: filteredInvoices.length
+      });
+
     } catch (error) {
-      toast.error("Failed to load dashboard");
+      console.error("Dashboard fetch error:", error);
+      toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
@@ -37,23 +130,17 @@ export default function Dashboard() {
     );
   }
 
-  // Safety check: if stats is null or undefined, show error state
+  // Safety check
   if (!stats) {
     return (
       <div className="space-y-6 fade-in bg-gray-50 -m-8 p-8 min-h-screen">
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
           <h2 className="text-xl font-semibold text-red-800 mb-2">Unable to Load Dashboard</h2>
-          <p className="text-red-600 mb-4">The backend server is not responding. Please ensure:</p>
-          <ul className="text-left text-red-700 space-y-2 max-w-md mx-auto">
-            <li>• MySQL database is running</li>
-            <li>• Backend server is started (run: <code className="bg-red-100 px-2 py-1 rounded">npm start</code> in backend folder)</li>
-            <li>• Backend is accessible at <code className="bg-red-100 px-2 py-1 rounded">http://localhost:8000</code></li>
-          </ul>
           <button
             onClick={() => window.location.reload()}
             className="mt-6 bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors"
           >
-            Retry Connection
+            Retry
           </button>
         </div>
       </div>
@@ -64,7 +151,6 @@ export default function Dashboard() {
   const totalRevenue = stats.totalRevenue || 0;
   const totalExpenses = stats.totalExpenses || 0;
   const totalInvoices = stats.recentInvoices?.length || 0;
-  const paidInvoices = stats.paidInvoices || 0;
 
   // Calculate percentages based on actual data
   const maxRevenue = Math.max(totalRevenue * 1.2, 10000); // Dynamic max based on actual revenue
@@ -120,14 +206,23 @@ export default function Dashboard() {
           Welcome to the TS-Billing
         </h1>
         <div className="flex items-center gap-3">
-          {/* Date Picker */}
-          <div className="relative">
-            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200 cursor-pointer">
-              <Calendar size={18} className="text-gray-500" />
+          {/* Date Picker Range */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 cursor-pointer">
+              <span className="text-[10px] uppercase text-gray-400 font-bold">Start</span>
               <input
                 type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="text-sm text-gray-700 border-none outline-none bg-transparent cursor-pointer"
+              />
+            </div>
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 cursor-pointer">
+              <span className="text-[10px] uppercase text-gray-400 font-bold">End</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
                 className="text-sm text-gray-700 border-none outline-none bg-transparent cursor-pointer"
               />
             </div>
@@ -155,7 +250,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
               <p className="text-xs text-gray-500 mb-3">Total revenue from paid invoices</p>
-              <p className="text-2xl font-bold text-gray-900">₹{totalRevenue.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">{currencySymbol}{totalRevenue.toFixed(2)}</p>
             </div>
             <CircularProgress percentage={revenuePercentage} color="#10B981" />
           </div>
@@ -174,7 +269,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Expenses</p>
               <p className="text-xs text-gray-500 mb-3">Total expenses recorded</p>
-              <p className="text-2xl font-bold text-gray-900">₹{totalExpenses.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">{currencySymbol}{totalExpenses.toFixed(2)}</p>
             </div>
             <CircularProgress percentage={expensesPercentage} color="#EF4444" />
           </div>
@@ -207,6 +302,49 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Monthly Analytics Chart */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <h2 className="text-lg font-semibold text-gray-900 mb-6">Revenue vs Expenses (Monthly)</h2>
+        <div className="h-[300px] w-full">
+          {monthlyData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  dy={10}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  tickFormatter={(value) => `${currencySymbol}${value}`}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f9fafb' }}
+                  contentStyle={{ 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
+                  }}
+                  formatter={(value) => [`${currencySymbol}${value.toFixed(2)}`, '']}
+                />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={32} />
+                <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+              No data available for the selected range
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Bottom Section: Recent Invoices & Client List */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Invoices */}
@@ -216,9 +354,23 @@ export default function Dashboard() {
               <h2 className="text-lg font-semibold text-gray-900">Recent Invoices</h2>
               <p className="text-sm text-gray-500">Latest invoices from your store</p>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-600">Total:</span>
-              <span className="text-blue-600 font-medium">{stats.recentInvoices?.length || 0}</span>
+            <div className="flex items-center gap-4">
+              <Select value={invoiceStatusFilter} onValueChange={setInvoiceStatusFilter}>
+                <SelectTrigger className="w-[130px] h-9 text-xs">
+                  <SelectValue placeholder="Filter Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-600">Total:</span>
+                <span className="text-blue-600 font-medium">{stats.recentInvoices?.length || 0}</span>
+              </div>
             </div>
           </div>
 
@@ -236,8 +388,11 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {stats.recentInvoices?.slice(0, 3).map((invoice, index) => (
-                  <tr key={invoice.id} className="border-b border-gray-100 hover:bg-gray-50">
+                {stats.recentInvoices
+                  ?.filter(inv => invoiceStatusFilter === "all" || inv.status === invoiceStatusFilter)
+                  .slice(0, 5)
+                  .map((invoice, index) => (
+                    <tr key={invoice.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-2 text-sm text-gray-700">{index + 1}</td>
                     <td className="py-3 px-2">
                       <div className="flex items-center gap-2">
@@ -248,9 +403,9 @@ export default function Dashboard() {
                       </div>
                     </td>
                     <td className="py-3 px-2 text-sm text-gray-700">{invoice.clientName}</td>
-                    <td className="py-3 px-2 text-sm text-gray-900 font-semibold">₹{parseFloat(invoice.total).toFixed(2)}</td>
+                    <td className="py-3 px-2 text-sm text-gray-900 font-semibold">{currencySymbol}{parseFloat(invoice.total).toFixed(2)}</td>
                     <td className="py-3 px-2 text-xs text-gray-500">
-                      {new Date(invoice.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {invoice.issueDate || (invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString() : 'N/A')}
                     </td>
                     <td className="py-3 px-2">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${invoice.status === 'paid' ? 'bg-green-100 text-green-700' :
@@ -305,12 +460,12 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{clientName}</p>
-                        <p className="text-xs text-gray-500">{invoiceCount} invoice{invoiceCount !== 1 ? 's' : ''} • ₹{totalAmount.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">{invoiceCount} invoice{invoiceCount !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500">Total</p>
-                      <p className="text-sm font-semibold text-gray-900">₹{totalAmount.toFixed(2)}</p>
+                      <p className="text-sm font-semibold text-gray-900">{currencySymbol}{totalAmount.toFixed(2)}</p>
                     </div>
                   </div>
                 );

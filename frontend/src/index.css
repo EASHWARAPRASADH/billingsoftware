@@ -209,10 +209,45 @@ code {
 
 /* Print Styles for Invoice */
 @media print {
+
+    /* Remove browser default headers and footers */
+    @page {
+        margin: 0.5cm;
+        size: A4;
+    }
+
+    /* Hide all non-invoice elements */
+    body * {
+        visibility: hidden;
+    }
+
+    /* Show only the invoice container and its children */
+    .invoice-container,
+    .invoice-container * {
+        visibility: visible;
+    }
+
+    /* Position invoice container at top of page */
     .invoice-container {
-        position: relative;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
         min-height: auto;
-        padding-bottom: 20px;
+        padding: 20px;
+        background: white !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    /* Hide navigation and action buttons */
+    .print\:hidden,
+    button,
+    nav,
+    header:not(.invoice-header),
+    footer:not(.invoice-footer) {
+        display: none !important;
+        visibility: hidden !important;
     }
 
     .invoice-header {
@@ -268,5 +303,18 @@ code {
     .signature-company {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+    }
+
+    /* Ensure colors print correctly */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+    }
+
+    /* Remove any background effects */
+    .glass {
+        background: white !important;
+        backdrop-filter: none !important;
     }
 }

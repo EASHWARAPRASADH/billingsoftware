@@ -1,389 +1,241 @@
-import { API } from "@/App";
 import { Button } from "@/components/ui/button";
-import axios from "axios";
-import { DollarSign, TrendingUp } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import { expenseService } from "@/services/expenseService";
+import { invoiceService } from "@/services/invoiceService";
+import { BarChart3, Calendar, Filter, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
 const COLORS = ["#0ea5e9", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#06b6d4", "#6366f1", "#d946ef"];
 
 export default function Analytics() {
-  const [expenses, setExpenses] = useState([]);
-  const [invoices, setInvoices] = useState([]);
+  const { currencySymbol } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState("6months");
-  const [viewType, setViewType] = useState("monthly");
+  const [invoices, setInvoices] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [processedData, setProcessedData] = useState(null);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      const [expensesRes, invoicesRes] = await Promise.all([
-        axios.get(`${API}/expenses`),
-        axios.get(`${API}/invoices`)
+      const [invRes, expRes] = await Promise.all([
+        invoiceService.getAll(),
+        expenseService.getAll()
       ]);
-      setExpenses(expensesRes.data);
-      setInvoices(invoicesRes.data);
+
+      if (invRes.error) throw invRes.error;
+      if (expRes.error) throw expRes.error;
+
+      const filteredInvoices = (invRes.data || []).filter(inv => {
+        const date = (inv.invoice_date || "").split(' ')[0];
+        return date >= startDate && date <= endDate;
+      });
+
+      const filteredExpenses = (expRes.data || []).filter(exp => {
+        const date = (exp.expense_date || "").split(' ')[0];
+        return date >= startDate && date <= endDate;
+      });
+
+      processAnalytics(filteredInvoices, filteredExpenses);
     } catch (error) {
+      console.error("Analytics fetch error:", error);
       toast.error("Failed to load analytics data");
     } finally {
       setLoading(false);
     }
   };
 
-  const processExpensesByCategory = () => {
-    if (!Array.isArray(expenses)) return [];
-    const categoryMap = {};
-    expenses.forEach((exp) => {
-      // Ensure amount is a number
-      const amount = parseFloat(exp.amount) || 0;
-      categoryMap[exp.category] = (categoryMap[exp.category] || 0) + amount;
-    });
-    return Object.entries(categoryMap).map(([name, value], idx) => ({ id: `cat-${idx}`, name, value }));
-  };
+  const processAnalytics = (invoices, expenses) => {
+    const paidInvoices = invoices.filter(inv => inv.status === 'paid');
+    const totalRevenue = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0);
+    const totalExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
+    const netProfit = totalRevenue - totalExpenses;
+    const avgInvoiceValue = paidInvoices.length > 0 ? totalRevenue / paidInvoices.length : 0;
 
-  const processMonthlyExpenses = () => {
-    if (!Array.isArray(expenses)) return [];
-    const monthMap = {};
-    const now = new Date();
-
-    expenses.forEach((exp) => {
-      const date = new Date(exp.expense_date);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      const amount = parseFloat(exp.amount) || 0;
-      monthMap[monthKey] = (monthMap[monthKey] || 0) + amount;
-    });
-
-    const sortedMonths = Object.keys(monthMap).sort();
-    return sortedMonths.slice(-6).map((month, idx) => ({
-      id: `exp-${idx}`,
-      month: new Date(month + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-      expenses: monthMap[month]
-    }));
-  };
-
-  const processMonthlyRevenue = () => {
-    if (!Array.isArray(invoices)) return [];
-    const monthMap = {};
-
-    invoices.forEach((inv) => {
-      if (inv.status === "paid") {
-        const date = new Date(inv.issue_date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        const total = parseFloat(inv.total) || 0;
-        monthMap[monthKey] = (monthMap[monthKey] || 0) + total;
-      }
-    });
-
-    const sortedMonths = Object.keys(monthMap).sort();
-    return sortedMonths.slice(-6).map((month, idx) => ({
-      id: `rev-${idx}`,
-      month: new Date(month + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-      revenue: monthMap[month]
-    }));
-  };
-
-  const processProfitTrends = () => {
-    const monthMap = {};
-
-    if (Array.isArray(invoices)) {
-      invoices.forEach((inv) => {
-        if (inv.status === "paid") {
-          const date = new Date(inv.issue_date);
-          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-          const total = parseFloat(inv.total) || 0;
-          monthMap[monthKey] = (monthMap[monthKey] || { revenue: 0, expenses: 0 });
-          monthMap[monthKey].revenue += total;
-        }
-      });
-    }
-
-    if (Array.isArray(expenses)) {
-      expenses.forEach((exp) => {
-        const date = new Date(exp.expense_date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        const amount = parseFloat(exp.amount) || 0;
-        monthMap[monthKey] = (monthMap[monthKey] || { revenue: 0, expenses: 0 });
-        monthMap[monthKey].expenses += amount;
-      });
-    }
-
-    const sortedMonths = Object.keys(monthMap).sort();
-    return sortedMonths.slice(-6).map((month, idx) => {
-      const data = monthMap[month];
+    // Monthly trends
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthlyTrends = months.map((month, idx) => {
+      const monthInvoices = paidInvoices.filter(inv => new Date(inv.invoice_date).getMonth() === idx);
+      const monthExpenses = expenses.filter(exp => new Date(exp.expense_date).getMonth() === idx);
+      
       return {
-        id: `profit-${idx}`,
-        month: new Date(month + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        revenue: data.revenue,
-        expenses: data.expenses,
-        profit: data.revenue - data.expenses
+        name: month,
+        revenue: monthInvoices.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0),
+        expenses: monthExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0)
       };
+    }).filter(m => m.revenue > 0 || m.expenses > 0);
+
+    // Expense distribution
+    const expenseCategories = {};
+    expenses.forEach(exp => {
+      const cat = exp.category || 'Other';
+      expenseCategories[cat] = (expenseCategories[cat] || 0) + parseFloat(exp.amount || 0);
+    });
+
+    const expenseDistribution = Object.entries(expenseCategories).map(([name, value]) => ({ name, value }));
+
+    setProcessedData({
+      summary: {
+        totalRevenue,
+        totalExpenses,
+        netProfit,
+        avgInvoiceValue,
+        invoiceCount: paidInvoices.length
+      },
+      monthlyTrends,
+      expenseDistribution
     });
   };
 
-  const processYearlyExpenses = () => {
-    if (!Array.isArray(expenses)) return [];
-    const yearMap = {};
-    expenses.forEach((exp) => {
-      const year = new Date(exp.expense_date).getFullYear().toString();
-      const amount = parseFloat(exp.amount) || 0;
-      yearMap[year] = (yearMap[year] || 0) + amount;
-    });
-    return Object.keys(yearMap).sort().map(year => ({
-      year,
-      expenses: yearMap[year]
-    }));
-  };
-
-  const processYearlyRevenue = () => {
-    if (!Array.isArray(invoices)) return [];
-    const yearMap = {};
-    invoices.forEach((inv) => {
-      if (inv.status === "paid") {
-        const year = new Date(inv.issue_date).getFullYear().toString();
-        const total = parseFloat(inv.total) || 0;
-        yearMap[year] = (yearMap[year] || 0) + total;
-      }
-    });
-    return Object.keys(yearMap).sort().map(year => ({
-      year,
-      revenue: yearMap[year]
-    }));
-  };
-
-  const processYearlyProfit = () => {
-    const yearMap = {};
-
-    if (Array.isArray(invoices)) {
-      invoices.forEach((inv) => {
-        if (inv.status === "paid") {
-          const year = new Date(inv.issue_date).getFullYear().toString();
-          const total = parseFloat(inv.total) || 0;
-          yearMap[year] = (yearMap[year] || { revenue: 0, expenses: 0 });
-          yearMap[year].revenue += total;
-        }
-      });
-    }
-
-    if (Array.isArray(expenses)) {
-      expenses.forEach((exp) => {
-        const year = new Date(exp.expense_date).getFullYear().toString();
-        const amount = parseFloat(exp.amount) || 0;
-        yearMap[year] = (yearMap[year] || { revenue: 0, expenses: 0 });
-        yearMap[year].expenses += amount;
-      });
-    }
-
-    return Object.keys(yearMap).sort().map(year => ({
-      year,
-      revenue: yearMap[year].revenue,
-      expenses: yearMap[year].expenses,
-      profit: yearMap[year].revenue - yearMap[year].expenses
-    }));
-  };
-
-  const expensesByCategory = processExpensesByCategory();
-  const monthlyExpenses = processMonthlyExpenses();
-  const monthlyRevenue = processMonthlyRevenue();
-  const profitTrends = processProfitTrends();
-
-  const yearlyExpenses = processYearlyExpenses();
-  const yearlyRevenue = processYearlyRevenue();
-  const yearlyProfit = processYearlyProfit();
-
-  const currentExpensesData = viewType === "monthly" ? monthlyExpenses : yearlyExpenses;
-  const currentRevenueData = viewType === "monthly" ? monthlyRevenue : yearlyRevenue;
-  const currentProfitData = viewType === "monthly" ? profitTrends : yearlyProfit;
-  const xAxisKey = viewType === "monthly" ? "month" : "year";
-
-  const totalExpenses = Array.isArray(expenses)
-    ? expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
-    : 0;
-  const totalRevenue = Array.isArray(invoices)
-    ? invoices
-      .filter((inv) => inv.status === "paid")
-      .reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0)
-    : 0;
-  const totalProfit = totalRevenue - totalExpenses;
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="skeleton h-32 rounded-2xl"></div>
-        <div className="skeleton h-96 rounded-2xl"></div>
-      </div>
-    );
+  if (loading || !processedData) {
+    return <div className="skeleton h-96 rounded-2xl"></div>;
   }
 
   return (
-    <div className="space-y-8 fade-in" data-testid="analytics-container">
-      <div className="flex justify-between items-center flex-wrap gap-4">
-        <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-sky-700 to-sky-500 bg-clip-text text-transparent">Analytics & Reports</h1>
-        <div className="analytics-filters space-x-2">
-          <Button
-            variant={viewType === "monthly" ? "default" : "outline"}
-            onClick={() => setViewType("monthly")}
-          >
-            Monthly
-          </Button>
-          <Button
-            variant={viewType === "yearly" ? "default" : "outline"}
-            onClick={() => setViewType("yearly")}
-          >
-            Yearly
-          </Button>
+    <div className="space-y-6 fade-in">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-sky-700 to-sky-500 bg-clip-text text-transparent">Financial Analytics</h1>
+          <p className="text-gray-500 mt-2">Deep dive into your business performance</p>
+        </div>
+        <div className="flex flex-wrap gap-3 glass p-2 rounded-xl">
+          <div className="flex items-center gap-2 px-3 border-r">
+            <Calendar size={16} className="text-sky-600" />
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent text-sm font-medium focus:outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-2 px-3">
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent text-sm font-medium focus:outline-none"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="glass rounded-2xl p-6 scale-in">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">Total Revenue</h3>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-sky-400 to-sky-600">
-              <DollarSign className="text-white" size={20} />
+      {/* Summary Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="glass rounded-2xl p-6 hover-up border-b-4 border-green-500">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-green-50 rounded-lg text-green-600">
+              <TrendingUp size={20} />
             </div>
           </div>
-          <p className="text-3xl font-bold text-gray-800" data-testid="total-revenue-analytics">₹{totalRevenue.toFixed(2)}</p>
+          <p className="text-sm font-medium text-gray-500 mb-1">Total Revenue</p>
+          <h3 className="text-3xl font-bold text-gray-900">{currencySymbol}{processedData.summary.totalRevenue.toFixed(2)}</h3>
+          <p className="text-xs text-green-600 mt-2 font-medium">From {processedData.summary.invoiceCount} paid invoices</p>
         </div>
 
-        <div className="glass rounded-2xl p-6 scale-in">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">Total Expenses</h3>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-sky-300 to-sky-500">
-              <DollarSign className="text-white" size={20} />
+        <div className="glass rounded-2xl p-6 hover-up border-b-4 border-red-500">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-red-50 rounded-lg text-red-600">
+              <TrendingDown size={20} />
             </div>
           </div>
-          <p className="text-3xl font-bold text-gray-800" data-testid="total-expenses-analytics">₹{totalExpenses.toFixed(2)}</p>
+          <p className="text-sm font-medium text-gray-500 mb-1">Total Expenses</p>
+          <h3 className="text-3xl font-bold text-gray-900">{currencySymbol}{processedData.summary.totalExpenses.toFixed(2)}</h3>
+          <p className="text-xs text-gray-500 mt-2">Operational overhead</p>
         </div>
 
-        <div className="glass rounded-2xl p-6 scale-in">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">Net Profit</h3>
-            <div className={`p-3 rounded-xl bg-gradient-to-br ${totalProfit >= 0 ? "from-blue-400 to-sky-600" : "from-red-400 to-pink-500"}`}>
-              <TrendingUp className="text-white" size={20} />
+        <div className="glass rounded-2xl p-6 hover-up border-b-4 border-blue-500">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+              <BarChart3 size={20} />
             </div>
           </div>
-          <p className={`text-3xl font-bold ${totalProfit >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="net-profit-analytics">
-            ₹{totalProfit.toFixed(2)}
+          <p className="text-sm font-medium text-gray-500 mb-1">Net Profit</p>
+          <h3 className={`text-3xl font-bold ${processedData.summary.netProfit >= 0 ? "text-blue-600" : "text-red-600"}`}>
+            {currencySymbol}{processedData.summary.netProfit.toFixed(2)}
+          </h3>
+          <p className="text-xs text-gray-500 mt-2 font-medium">
+            Margin: {processedData.summary.totalRevenue > 0 ? ((processedData.summary.netProfit / processedData.summary.totalRevenue) * 100).toFixed(1) : 0}%
           </p>
         </div>
+
+        <div className="glass rounded-2xl p-6 hover-up border-b-4 border-purple-500">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+              <Filter size={20} />
+            </div>
+          </div>
+          <p className="text-sm font-medium text-gray-500 mb-1">Avg. Invoice</p>
+          <h3 className="text-3xl font-bold text-purple-600">{currencySymbol}{processedData.summary.avgInvoiceValue.toFixed(2)}</h3>
+          <p className="text-xs text-gray-500 mt-2">Per paid customer</p>
+        </div>
       </div>
 
-      {/* Charts Grid */}
+      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Expenses by Category */}
-        <div className="glass rounded-2xl p-6 slide-in">
-          <h2 className="text-xl font-semibold text-sky-900 mb-4">Expenses by Category</h2>
-          {expensesByCategory.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-gray-800 mb-6">Revenue vs Expenses</h3>
+          <div className="h-[350px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={processedData.monthlyTrends}>
+                <defs>
+                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorExp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280' }} tickFormatter={(val) => `${currencySymbol}${val}`} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  formatter={(val) => [`${currencySymbol}${parseFloat(val).toFixed(2)}`, '']}
+                />
+                <Legend verticalAlign="top" align="right" iconType="circle" />
+                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#0ea5e9" fillOpacity={1} fill="url(#colorRev)" strokeWidth={3} />
+                <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#f43f5e" fillOpacity={1} fill="url(#colorExp)" strokeWidth={3} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-gray-800 mb-6">Expense Distribution</h3>
+          <div className="h-[350px]">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={expensesByCategory}
+                  data={processedData.expenseDistribution}
                   cx="50%"
                   cy="50%"
-                  labelLine={true}
-                  label={({ name, value }) => `${name}: ₹${value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
+                  innerRadius={80}
+                  outerRadius={120}
+                  paddingAngle={5}
                   dataKey="value"
                 >
-                  {expensesByCategory.map((entry, index) => (
-                    <Cell key={entry.id || `cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  {processedData.expenseDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => `₹${value.toFixed(2)}`} />
+                <Tooltip 
+                  formatter={(val) => `${currencySymbol}${parseFloat(val).toFixed(2)}`}
+                  contentStyle={{ borderRadius: '12px', border: 'none' }}
+                />
+                <Legend verticalAlign="bottom" align="center" iconType="circle" />
               </PieChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="h-80 flex items-center justify-center text-gray-500">No expense data available</div>
-          )}
-        </div>
-
-        {/* Monthly/Yearly Expenses Trend */}
-        <div className="glass rounded-2xl p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">{viewType === 'monthly' ? 'Monthly' : 'Yearly'} Expenses Trend</h2>
-          {currentExpensesData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={currentExpensesData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey={xAxisKey} stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
-                  formatter={(value) => `₹${value.toFixed(2)}`}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="expenses"
-                  stroke="#0ea5e9"
-                  strokeWidth={2}
-                  dot={{ fill: "#0ea5e9", r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-80 flex items-center justify-center text-gray-500">No expense data available</div>
-          )}
-        </div>
-
-        {/* Monthly/Yearly Revenue Trend */}
-        <div className="glass rounded-2xl p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">{viewType === 'monthly' ? 'Monthly' : 'Yearly'} Revenue Trend</h2>
-          {currentRevenueData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={currentRevenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey={xAxisKey} stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
-                  formatter={(value) => `₹${value.toFixed(2)}`}
-                />
-                <Legend />
-                <Bar dataKey="revenue" fill="#10b981" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-80 flex items-center justify-center text-gray-500">No revenue data available</div>
-          )}
-        </div>
-
-        {/* Profit/Loss Trend */}
-        <div className="glass rounded-2xl p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Profit/Loss Trend</h2>
-          {currentProfitData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={currentProfitData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey={xAxisKey} stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
-                  formatter={(value) => `₹${value.toFixed(2)}`}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="profit"
-                  stroke="#0ea5e9"
-                  strokeWidth={2}
-                  dot={(props) => {
-                    const { cx, cy, payload } = props;
-                    const color = payload.profit >= 0 ? "#10b981" : "#ef4444";
-                    return <circle cx={cx} cy={cy} r={4} fill={color} />;
-                  }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-80 flex items-center justify-center text-gray-500">No data available</div>
-          )}
+          </div>
         </div>
       </div>
     </div>

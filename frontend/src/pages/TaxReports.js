@@ -1,4 +1,3 @@
-import { API } from "@/App";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -7,13 +6,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import axios from "axios";
-import { Calculator, Download } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { invoiceService } from "@/services/invoiceService";
+import { profileService } from "@/services/profileService";
+import { Calculator, Download, Filter, Receipt } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
 export default function TaxReports() {
+  const { currencySymbol } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,13 +27,23 @@ export default function TaxReports() {
 
   const fetchData = async () => {
     try {
-      const [invoicesRes, profileRes] = await Promise.all([
-        axios.get(`${API}/invoices`),
-        axios.get(`${API}/profile`)
+      // Parallel fetch for invoices and profile
+      const [invoicesData, profileRes] = await Promise.all([
+        invoiceService.getAll().then(res => res.data || []),
+        profileService.get().then(res => res.data)
       ]);
-      setInvoices(invoicesRes.data);
-      setProfile(profileRes.data);
+
+      setInvoices(invoicesData);
+
+      if (profileRes) {
+        setProfile({
+          taxRate: 0, // Not strictly in schema, but kept for logic if we added it
+          currency: "INR",
+          ...profileRes
+        });
+      }
     } catch (error) {
+      console.error("Fetch tax data error:", error);
       toast.error("Failed to load tax data");
     } finally {
       setLoading(false);
@@ -42,7 +54,12 @@ export default function TaxReports() {
     const monthMap = {};
 
     invoices.forEach((inv) => {
-      const date = new Date(inv.issueDate);
+      // Map Supabase fields
+      const issueDate = inv.invoice_date;
+      const subtotal = parseFloat(inv.subtotal || 0);
+      const taxAmount = parseFloat(inv.tax_amount || 0);
+
+      const date = new Date(issueDate);
       const year = date.getFullYear();
       if (year.toString() === selectedYear) {
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -53,8 +70,8 @@ export default function TaxReports() {
             count: 0
           };
         }
-        monthMap[monthKey].subtotal += parseFloat(inv.subtotal || 0);
-        monthMap[monthKey].tax += parseFloat(inv.tax || 0);
+        monthMap[monthKey].subtotal += subtotal;
+        monthMap[monthKey].tax += taxAmount;
         monthMap[monthKey].count += 1;
       }
     });
@@ -75,7 +92,11 @@ export default function TaxReports() {
     const yearMap = {};
 
     invoices.forEach((inv) => {
-      const date = new Date(inv.issueDate);
+      const issueDate = inv.invoice_date;
+      const subtotal = parseFloat(inv.subtotal || 0);
+      const taxAmount = parseFloat(inv.tax_amount || 0);
+
+      const date = new Date(issueDate);
       const year = date.getFullYear();
       if (!yearMap[year]) {
         yearMap[year] = {
@@ -85,8 +106,8 @@ export default function TaxReports() {
           avgTaxRate: 0
         };
       }
-      yearMap[year].subtotal += parseFloat(inv.subtotal || 0);
-      yearMap[year].tax += parseFloat(inv.tax || 0);
+      yearMap[year].subtotal += subtotal;
+      yearMap[year].tax += taxAmount;
       yearMap[year].count += 1;
     });
 
@@ -170,8 +191,8 @@ export default function TaxReports() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Filing Status</p>
               <p className={`text-lg font-semibold px-3 py-1 rounded-full inline-block ${getTaxFilingStatus() === "Current" ? "bg-green-100 text-green-700" :
-                  getTaxFilingStatus() === "Due Soon" ? "bg-yellow-100 text-yellow-700" :
-                    "bg-red-100 text-red-700"
+                getTaxFilingStatus() === "Due Soon" ? "bg-yellow-100 text-yellow-700" :
+                  "bg-red-100 text-red-700"
                 }`} data-testid="filing-status">
                 {getTaxFilingStatus()}
               </p>
@@ -190,7 +211,7 @@ export default function TaxReports() {
         <div className="glass rounded-2xl p-6 scale-in">
           <h3 className="text-sm font-medium text-gray-600 mb-2">Total Revenue</h3>
           <p className="text-3xl font-bold text-gray-800" data-testid="tax-total-revenue">
-            ₹{selectedYearData.subtotal.toFixed(2)}
+            {currencySymbol}{selectedYearData.subtotal.toFixed(2)}
           </p>
           <p className="text-xs text-gray-500 mt-1">{selectedYearData.count} invoices</p>
         </div>
@@ -198,7 +219,7 @@ export default function TaxReports() {
         <div className="glass rounded-2xl p-6 scale-in">
           <h3 className="text-sm font-medium text-gray-600 mb-2">Tax Collected</h3>
           <p className="text-3xl font-bold text-blue-600" data-testid="tax-collected">
-            ₹{selectedYearData.tax.toFixed(2)}
+            {currencySymbol}{selectedYearData.tax.toFixed(2)}
           </p>
           <p className="text-xs text-gray-500 mt-1">{selectedYearData.avgTaxRate.toFixed(2)}% average rate</p>
         </div>
@@ -214,7 +235,7 @@ export default function TaxReports() {
         <div className="glass rounded-2xl p-6">
           <h3 className="text-sm font-medium text-gray-600 mb-2">Remaining Balance</h3>
           <p className="text-3xl font-bold text-green-600" data-testid="tax-remaining">
-            ₹{(selectedYearData.subtotal - selectedYearData.tax).toFixed(2)}
+            {currencySymbol}{(selectedYearData.subtotal - selectedYearData.tax).toFixed(2)}
           </p>
           <p className="text-xs text-gray-500 mt-1">After tax collection</p>
         </div>
@@ -231,7 +252,7 @@ export default function TaxReports() {
               <YAxis stroke="#6b7280" />
               <Tooltip
                 contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
-                formatter={(value) => `₹${value.toFixed(2)}`}
+                formatter={(value) => `${currencySymbol}${value.toFixed(2)}`}
               />
               <Legend />
               <Bar dataKey="subtotal" fill="#0ea5e9" name="Subtotal" radius={[8, 8, 0, 0]} />
@@ -263,9 +284,9 @@ export default function TaxReports() {
                   <tr key={idx} className="border-b border-gray-100 hover:bg-white/50">
                     <td className="py-3 px-4 font-medium">{month.month}</td>
                     <td className="py-3 px-4 text-right">{month.count}</td>
-                    <td className="py-3 px-4 text-right font-semibold">₹{month.subtotal.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-semibold">{currencySymbol}{month.subtotal.toFixed(2)}</td>
                     <td className="py-3 px-4 text-right">{profile?.taxRate || 0}%</td>
-                    <td className="py-3 px-4 text-right font-semibold text-blue-600">₹{month.tax.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-blue-600">{currencySymbol}{month.tax.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -293,7 +314,7 @@ export default function TaxReports() {
             <strong>Reporting Period:</strong> Year {selectedYear}
           </p>
           <p>
-            <strong>Total Tax Collected:</strong> ₹{selectedYearData.tax.toFixed(2)} across {selectedYearData.count} invoices
+            <strong>Total Tax Collected:</strong> {currencySymbol}{selectedYearData.tax.toFixed(2)} across {selectedYearData.count} invoices
           </p>
           <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-sm text-blue-900">

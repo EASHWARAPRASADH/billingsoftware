@@ -1,4 +1,3 @@
-import { API } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,13 +7,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import axios from "axios";
+import { useAuth } from "@/contexts/AuthContext";
+import { invoiceService } from "@/services/invoiceService";
 import { FileText, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function Invoices() {
+  const { currencySymbol } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,9 +27,24 @@ export default function Invoices() {
 
   const fetchInvoices = async () => {
     try {
-      const response = await axios.get(`${API}/invoices`);
-      setInvoices(response.data);
+      const { data, error } = await invoiceService.getAll();
+
+      if (error) throw error;
+
+      // Map Supabase fields (snake_case) to UI fields (camelCase)
+      const mappedInvoices = (data || []).map(inv => ({
+        id: inv.id,
+        invoiceNumber: inv.invoice_number,
+        clientName: inv.client_name,
+        issueDate: inv.invoice_date,
+        dueDate: inv.due_date,
+        total: inv.total_amount,
+        status: inv.status
+      }));
+
+      setInvoices(mappedInvoices);
     } catch (error) {
+      console.error("Fetch invoices error:", error);
       toast.error("Failed to load invoices");
     } finally {
       setLoading(false);
@@ -37,8 +53,8 @@ export default function Invoices() {
 
   const filteredInvoices = invoices.filter((invoice) => {
     const matchesSearch =
-      invoice.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      (invoice.clientName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice.invoiceNumber || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -118,7 +134,7 @@ export default function Invoices() {
                     <td className="py-3 px-4">{invoice.clientName}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{invoice.issueDate}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{invoice.dueDate}</td>
-                    <td className="py-3 px-4 font-semibold">₹{parseFloat(invoice.total).toFixed(2)}</td>
+                    <td className="py-3 px-4 font-semibold">{currencySymbol}{parseFloat(invoice.total || 0).toFixed(2)}</td>
                     <td className="py-3 px-4">
                       <span className={`text-xs px-3 py-1 rounded-full status-${invoice.status}`}>
                         {invoice.status}

@@ -7,22 +7,16 @@ const auth = require('../middleware/auth');
 const router = express.Router();
 
 // @route   GET /api/dashboard
-// @desc    Get dashboard statistics
-// @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    // Get all invoices
-    const invoices = await Invoice.findAll({ where: { userId: req.user.id } });
+    const invoices = await Invoice.findAll({ where: { user_id: req.user.id } });
+    const expenses = await Expense.findAll({ where: { user_id: req.user.id } });
     
-    // Get all expenses
-    const expenses = await Expense.findAll({ where: { userId: req.user.id } });
-    
-    // Calculate stats - convert strings to numbers
     const totalRevenue = invoices
       .filter(inv => inv.status === 'paid')
-      .reduce((sum, inv) => sum + parseFloat(inv.total), 0);
+      .reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0);
     
-    const totalExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const totalExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
     
     const pendingInvoices = invoices.filter(inv => 
       ['draft', 'sent'].includes(inv.status)
@@ -32,16 +26,15 @@ router.get('/', auth, async (req, res) => {
       inv.status === 'paid'
     ).length;
     
-    // Get recent items (last 5)
     const recentInvoices = await Invoice.findAll({
-      where: { userId: req.user.id },
-      order: [['createdAt', 'DESC']],
+      where: { user_id: req.user.id },
+      order: [['created_at', 'DESC']],
       limit: 5
     });
     
     const recentExpenses = await Expense.findAll({
-      where: { userId: req.user.id },
-      order: [['createdAt', 'DESC']],
+      where: { user_id: req.user.id },
+      order: [['created_at', 'DESC']],
       limit: 5
     });
     

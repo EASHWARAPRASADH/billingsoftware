@@ -1,4 +1,3 @@
-import { API } from "@/App";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,13 +10,16 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import axios from "axios";
+import { useAuth } from "@/contexts/AuthContext";
+import { invoiceService } from "@/services/invoiceService";
+import { profileService } from "@/services/profileService";
 import { ArrowLeft, Download, Edit, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function InvoiceDetail() {
+  const { currencySymbol } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState(null);
@@ -30,15 +32,54 @@ export default function InvoiceDetail() {
 
   const fetchData = async () => {
     try {
-      const [invoiceRes, profileRes] = await Promise.all([
-        axios.get(`${API}/invoices/${id}`),
-        axios.get(`${API}/profile`)
-      ]);
-      setInvoice(invoiceRes.data);
-      setProfile(profileRes.data);
+      // Fetch Invoice
+      const { data: invoiceData, error: invoiceError } = await invoiceService.getById(id);
+      if (invoiceError) throw invoiceError;
+
+      // Map snake_case to camelCase for UI
+      const mappedInvoice = {
+        id: invoiceData.id,
+        invoiceNumber: invoiceData.invoice_number,
+        status: invoiceData.status,
+        clientName: invoiceData.client_name,
+        clientEmail: invoiceData.client_email,
+        clientAddress: invoiceData.client_address,
+        issueDate: invoiceData.invoice_date,
+        dueDate: invoiceData.due_date,
+        items: Array.isArray(invoiceData.items) ? invoiceData.items : JSON.parse(invoiceData.items || '[]'),
+        subtotal: invoiceData.subtotal,
+        shippingCost: invoiceData.shipping_cost,
+        tax: invoiceData.tax_amount,
+        couponDiscount: invoiceData.discount_amount,
+        total: invoiceData.total_amount,
+        notes: invoiceData.notes,
+        applyGST: false // This flag isn't in the DB, inferred from logic or deprecated
+      };
+      setInvoice(mappedInvoice);
+
+      // Fetch Profile
+      const { data: profileData, error: profileError } = await profileService.get();
+
+      if (!profileError && profileData) {
+        setProfile({
+          businessName: profileData.company_name,
+          email: profileData.company_email,
+          phone: profileData.company_phone,
+          address: profileData.company_address,
+          logo: profileData.company_logo,
+          signature: profileData.signature_image,
+          bankName: profileData.bank_name,
+          accountNumber: profileData.account_number,
+          ifscCode: profileData.ifsc_code,
+          gstNumber: profileData.gst_number,
+          panNumber: profileData.pan_number
+        });
+      }
+
     } catch (error) {
-      toast.error("Failed to load invoice");
-      navigate("/invoices");
+      console.error("Fetch error:", error);
+      toast.error("Failed to load invoice details");
+      //   navigate("/invoices"); // Commented out to prevent redirect loop / flash if error is temporary
     } finally {
       setLoading(false);
     }
@@ -46,7 +87,8 @@ export default function InvoiceDetail() {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`${API}/invoices/${id}`);
+      const { error } = await invoiceService.delete(id);
+      if (error) throw error;
       toast.success("Invoice deleted successfully");
       navigate("/invoices");
     } catch (error) {
@@ -55,11 +97,27 @@ export default function InvoiceDetail() {
   };
 
   const handlePrint = () => {
+    const originalTitle = document.title;
+    document.title = invoice?.invoiceNumber || 'Invoice';
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 100);
   };
 
   if (loading) {
     return <div className="skeleton h-96 rounded-2xl"></div>;
+  }
+
+  if (!invoice) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-xl font-semibold text-red-600">Invoice not found</h2>
+        <Button variant="outline" className="mt-4" onClick={() => navigate("/invoices")}>
+          Back to Invoices
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -111,17 +169,22 @@ export default function InvoiceDetail() {
       <div className="glass rounded-2xl p-6 scale-in invoice-container" data-testid="invoice-display">
         {/* Auto Placement: Logo */}
         <div className="invoice-header">
-          <img src="/images/logo.png" alt="Company Logo" className="logo-left" />
+          {/* Fallback logo or actual logo from profile could go here, for now keeping static as per original code structure but verifying path */}
+          {/* Note: Original code had /images/logo.png. We might want to use profile.logo if available */}
+          <img src={profile?.logo || "/images/logo.png"} alt="Company Logo" className="logo-left" onError={(e) => { e.target.style.display = 'none' }} />
         </div>
         {/* Header */}
         <div className="flex justify-between mb-4 pb-4 border-b">
           <div className="flex items-start gap-4">
-            {/* Logo removed from here to use absolute positioning */}
-            <div className="ml-24"> {/* Reduced from ml-32 to match smaller logo */}
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">{profile?.businessName}</h2>
+            <div className="ml-24">
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">{profile?.businessName || "Your Business"}</h2>
               {profile?.email && <p className="text-gray-600">{profile.email}</p>}
               {profile?.phone && <p className="text-gray-600">{profile.phone}</p>}
               {profile?.address && <p className="text-gray-600">{profile.address}</p>}
+              <div className="mt-2 flex gap-4 text-xs font-semibold text-gray-500 uppercase">
+                {profile?.gstNumber && <span>GST: {profile.gstNumber}</span>}
+                {profile?.panNumber && <span>PAN: {profile.panNumber}</span>}
+              </div>
             </div>
           </div>
           <div className="text-right">
@@ -159,6 +222,7 @@ export default function InvoiceDetail() {
             <thead>
               <tr className="border-b-2 border-gray-300">
                 <th className="text-left py-3 font-semibold text-gray-700">Description</th>
+                <th className="text-left py-3 font-semibold text-gray-700">HSN</th>
                 <th className="text-right py-3 font-semibold text-gray-700">Quantity</th>
                 <th className="text-right py-3 font-semibold text-gray-700">Rate</th>
                 <th className="text-right py-3 font-semibold text-gray-700">Amount</th>
@@ -168,9 +232,10 @@ export default function InvoiceDetail() {
               {invoice.items.map((item, index) => (
                 <tr key={index} className="border-b border-gray-200">
                   <td className="py-3">{item.description}</td>
+                  <td className="py-3">{item.hsn || '-'}</td>
                   <td className="text-right py-3">{item.quantity}</td>
-                  <td className="text-right py-3">₹{parseFloat(item.rate).toFixed(2)}</td>
-                  <td className="text-right py-3 font-semibold">₹{parseFloat(item.amount).toFixed(2)}</td>
+                  <td className="text-right py-3">{currencySymbol}{parseFloat(item.rate || 0).toFixed(2)}</td>
+                  <td className="text-right py-3 font-semibold">{currencySymbol}{parseFloat(item.amount || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -180,38 +245,84 @@ export default function InvoiceDetail() {
         {/* Totals */}
         <div className="flex justify-end mb-4">
           <div className="w-full md:w-1/3 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Subtotal:</span>
-              <span className="font-semibold" data-testid="invoice-subtotal">₹{parseFloat(invoice.subtotal).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Tax (18% GST):</span>
-              <span className="font-semibold" data-testid="invoice-tax">₹{parseFloat(invoice.tax).toFixed(2)}</span>
-            </div>
+            {parseFloat(invoice.subtotal || 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Sub Total:</span>
+                <span className="font-semibold" data-testid="invoice-subtotal">{currencySymbol}{parseFloat(invoice.subtotal || 0).toFixed(2)}</span>
+              </div>
+            )}
+            {parseFloat(invoice.shippingCost || 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Shipping cost:</span>
+                <span className="font-semibold" data-testid="invoice-shipping">{currencySymbol}{parseFloat(invoice.shippingCost).toFixed(2)}</span>
+              </div>
+            )}
+            {parseFloat(invoice.tax || 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">
+                  Total Tax
+                  {parseFloat(invoice.subtotal || 0) > 0 &&
+                    ` (${parseFloat(((parseFloat(invoice.tax || 0) / parseFloat(invoice.subtotal || 0)) * 100).toFixed(2))}%)`}
+                  :
+                </span>
+                <span className="font-semibold" data-testid="invoice-tax">{currencySymbol}{parseFloat(invoice.tax || 0).toFixed(2)}</span>
+              </div>
+            )}
+            {parseFloat(invoice.couponDiscount || 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Coupon Discount:</span>
+                <span className="font-semibold" data-testid="invoice-discount">{currencySymbol}{parseFloat(invoice.couponDiscount).toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-xl font-bold border-t-2 pt-2">
-              <span>Total:</span>
-              <span data-testid="invoice-total">₹{parseFloat(invoice.total).toFixed(2)}</span>
+              <span>Grand Total:</span>
+              <span data-testid="invoice-total">{currencySymbol}{parseFloat(invoice.total || 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
 
         {/* Notes */}
         {invoice.notes && (
-          <div className="pt-4 border-t">
+          <div className="pt-4 border-t mb-6">
             <h4 className="text-sm font-semibold text-gray-600 mb-2">NOTES:</h4>
             <p className="text-gray-700 whitespace-pre-wrap">{invoice.notes}</p>
           </div>
         )}
 
+        {/* Payment Information */}
+        <div className="pt-6 border-t grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <h4 className="text-sm font-bold text-sky-800 mb-3 uppercase tracking-wider">Payment Information</h4>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Bank Name:</span>
+                <span className="font-semibold text-gray-800">{profile?.bankName || "Not Specified"}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Account No:</span>
+                <span className="font-semibold text-gray-800">{profile?.accountNumber || "Not Specified"}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">IFSC Code:</span>
+                <span className="font-semibold text-gray-800">{profile?.ifscCode || "Not Specified"}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col justify-end text-right italic text-gray-400 text-xs">
+            <p>Please use Invoice Number as payment reference.</p>
+            <p>Thank you for your business!</p>
+          </div>
+        </div>
+
         {/* Auto Placement: Signature */}
         <div className="invoice-footer">
           <div className="signature-container">
-            <img src="/images/CEO-Sign.png" alt="CEO Signature" className="signature-right" />
+            <img src={profile?.signature || "/images/CEO-Sign.png"} alt="CEO Signature" className="signature-right" onError={(e) => { e.target.style.display = 'none' }} />
             <div className="signature-text">
               <p className="signature-name">Arun G</p>
               <p className="signature-title">CHIEF EXECUTIVE OFFICER</p>
               <p className="signature-auth">AUTHORISED SIGNATORY BY</p>
-              <p className="signature-company">Technosprint Info Solutions</p>
+              <p className="signature-company">{profile?.businessName || "Technosprint Info Solutions"}</p>
             </div>
           </div>
         </div>

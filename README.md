@@ -221,6 +221,10 @@ NODE_ENV=development
 CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 ```
 
+acccounts
+email:trainer@example.com ,, admin@example.com
+password:password123
+
 **Important**: Change `JWT_SECRET` to a random string for production!
 
 ### Step 5: Install Dependencies

@@ -1,8 +1,10 @@
 import "@/App.css";
 import { Toaster } from "@/components/ui/sonner";
-import axios from "axios";
-import { useEffect, useState } from "react";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+
+// API Configuration
+export const API = process.env.REACT_APP_API_URL || 'http://localhost:12345/api';
 
 // Pages
 import Layout from "@/components/Layout";
@@ -13,56 +15,35 @@ import Expenses from "@/pages/Expenses";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 import InvoiceForm from "@/pages/InvoiceForm";
 import Invoices from "@/pages/Invoices";
+import PaymentStatus from "@/pages/PaymentStatus";
 import Settings from "@/pages/Settings";
 import TaxReports from "@/pages/TaxReports";
 
-// Setup mock API for local development (no MongoDB required)
-// setupMockApi(); // DISABLED: Using real backend with MySQL database
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
-const API = `${BACKEND_URL}/api`;
-
-// Axios interceptor for auth
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/auth";
-    }
-    return Promise.reject(error);
-  }
-);
-
+// Protected Route Component
 function PrivateRoute({ children }) {
-  const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/auth" />;
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  return user ? children : <Navigate to="/auth" />;
 }
 
-function App() {
-  const [user, setUser] = useState(null);
+// App Content Component
+function AppContent() {
+  const { user } = useAuth();
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
 
   return (
     <div className="App">
       <BrowserRouter>
         <Routes>
-          <Route path="/auth" element={<AuthPage setUser={setUser} />} />
+          <Route path="/auth" element={<AuthPage />} />
           <Route
             path="/"
             element={
@@ -134,6 +115,16 @@ function App() {
             }
           />
           <Route
+            path="/payment-status"
+            element={
+              <PrivateRoute>
+                <Layout user={user}>
+                  <PaymentStatus />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/tax-reports"
             element={
               <PrivateRoute>
@@ -160,6 +151,13 @@ function App() {
   );
 }
 
-export default App;
+// Main App Component with AuthProvider
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
 
-export { API };
+export default App;

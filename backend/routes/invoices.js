@@ -5,25 +5,22 @@ const auth = require('../middleware/auth');
 
 const router = express.Router();
 
-// @route   POST /api/invoices
-// @desc    Create invoice
-// @access  Private
+// @route   POST /api/invoices/check-duplicate
 router.post('/check-duplicate', [
   auth,
-  body('clientName').notEmpty().trim(),
-  body('issueDate').notEmpty(),
-  body('total').isFloat()
+  body('client_name').notEmpty().trim(),
+  body('invoice_date').notEmpty(),
+  body('total_amount').isFloat()
 ], async (req, res) => {
   try {
-    const { clientName, issueDate, total } = req.body;
+    const { client_name, invoice_date, total_amount } = req.body;
 
-    // Check for existing invoice with same client, date, and total
     const duplicate = await Invoice.findOne({
       where: {
-        userId: req.user.id,
-        clientName: clientName,
-        issueDate: issueDate,
-        total: total
+        user_id: req.user.id,
+        client_name,
+        invoice_date,
+        total_amount
       }
     });
 
@@ -31,7 +28,7 @@ router.post('/check-duplicate', [
       return res.json({
         exists: true,
         invoiceId: duplicate.id,
-        invoiceNumber: duplicate.invoiceNumber
+        invoiceNumber: duplicate.invoice_number
       });
     }
 
@@ -43,25 +40,16 @@ router.post('/check-duplicate', [
 });
 
 // @route   POST /api/invoices
-// @desc    Create invoice
-// @access  Private
 router.post('/', [
   auth,
-  body('clientName').notEmpty().trim(),
-  body('clientEmail').optional().isEmail().normalizeEmail(),
-  body('clientAddress').optional().trim(),
+  body('client_name').notEmpty().trim(),
+  body('client_email').optional().isEmail().normalizeEmail(),
+  body('invoice_number').optional().trim(),
   body('items').isArray({ min: 1 }),
-  body('items.*.description').notEmpty().trim(),
-  body('items.*.quantity').isFloat({ min: 0 }),
-  body('items.*.rate').isFloat({ min: 0 }),
-  body('items.*.amount').isFloat({ min: 0 }),
   body('subtotal').isFloat({ min: 0 }),
-  body('tax').isFloat({ min: 0 }),
-  body('total').isFloat({ min: 0 }),
-  body('status').optional().isIn(['draft', 'sent', 'paid', 'overdue']),
-  body('issueDate').notEmpty(),
-  body('dueDate').notEmpty(),
-  body('notes').optional().trim()
+  body('total_amount').isFloat({ min: 0 }),
+  body('invoice_date').notEmpty(),
+  body('due_date').notEmpty()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -69,8 +57,31 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
+    if (req.body.invoice_number) {
+      const existing = await Invoice.findOne({
+        where: {
+          invoice_number: req.body.invoice_number,
+          user_id: req.user.id
+        }
+      });
+
+      if (existing) {
+        return res.status(400).json({
+          message: 'Invoice number already exists. Please use a different number.'
+        });
+      }
+    }
+
+    if (req.body.amount_received !== undefined && req.body.total_amount !== undefined) {
+      const received = parseFloat(req.body.amount_received);
+      const total = parseFloat(req.body.total_amount);
+      if (received >= total && total > 0) {
+        req.body.status = 'paid';
+      }
+    }
+
     const invoice = await Invoice.create({
-      userId: req.user.id,
+      user_id: req.user.id,
       ...req.body
     });
 
@@ -82,13 +93,11 @@ router.post('/', [
 });
 
 // @route   GET /api/invoices
-// @desc    Get all invoices
-// @access  Private
 router.get('/', auth, async (req, res) => {
   try {
     const invoices = await Invoice.findAll({
-      where: { userId: req.user.id },
-      order: [['createdAt', 'DESC']],
+      where: { user_id: req.user.id },
+      order: [['created_at', 'DESC']],
       limit: 1000
     });
 
@@ -100,14 +109,12 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   GET /api/invoices/:id
-// @desc    Get invoice by ID
-// @access  Private
 router.get('/:id', auth, async (req, res) => {
   try {
     const invoice = await Invoice.findOne({
       where: {
         id: req.params.id,
-        userId: req.user.id
+        user_id: req.user.id
       }
     });
 
@@ -123,21 +130,11 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // @route   PUT /api/invoices/:id
-// @desc    Update invoice
-// @access  Private
 router.put('/:id', [
   auth,
-  body('clientName').optional().notEmpty().trim(),
-  body('clientEmail').optional().isEmail().normalizeEmail(),
-  body('clientAddress').optional().trim(),
-  body('items').optional().isArray({ min: 1 }),
-  body('subtotal').optional().isFloat({ min: 0 }),
-  body('tax').optional().isFloat({ min: 0 }),
-  body('total').optional().isFloat({ min: 0 }),
-  body('status').optional().isIn(['draft', 'sent', 'paid', 'overdue']),
-  body('issueDate').optional().notEmpty(),
-  body('dueDate').optional().notEmpty(),
-  body('notes').optional().trim()
+  body('client_name').optional().notEmpty().trim(),
+  body('invoice_date').optional().notEmpty(),
+  body('due_date').optional().notEmpty()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -145,22 +142,36 @@ router.put('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const updateData = {};
-    const allowedFields = [
-      'clientName', 'clientEmail', 'clientAddress', 'items',
-      'subtotal', 'tax', 'total', 'status', 'issueDate', 'dueDate', 'notes'
-    ];
+    if (req.body.invoice_number) {
+      const existing = await Invoice.findOne({
+        where: {
+          invoice_number: req.body.invoice_number,
+          user_id: req.user.id,
+          id: { [require('sequelize').Op.ne]: req.params.id }
+        }
+      });
 
-    allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        updateData[field] = req.body[field];
+      if (existing) {
+        return res.status(400).json({
+          message: 'Invoice number already exists. Please use a different number.'
+        });
       }
-    });
+    }
 
-    const [updateCount] = await Invoice.update(updateData, {
+    if (req.body.amount_received !== undefined && req.body.total_amount !== undefined) {
+      const received = parseFloat(req.body.amount_received);
+      const total = parseFloat(req.body.total_amount);
+      if (received >= total && total > 0) {
+        req.body.status = 'paid';
+      } else if (req.body.status === 'paid' && received < total) {
+        req.body.status = 'sent';
+      }
+    }
+
+    const [updateCount] = await Invoice.update(req.body, {
       where: {
         id: req.params.id,
-        userId: req.user.id
+        user_id: req.user.id
       }
     });
 
@@ -177,14 +188,12 @@ router.put('/:id', [
 });
 
 // @route   DELETE /api/invoices/:id
-// @desc    Delete invoice
-// @access  Private
 router.delete('/:id', auth, async (req, res) => {
   try {
     const deleteCount = await Invoice.destroy({
       where: {
         id: req.params.id,
-        userId: req.user.id
+        user_id: req.user.id
       }
     });
 

@@ -15,52 +15,68 @@ const BusinessProfile = sequelize.define('BusinessProfile', {
     references: {
       model: 'Users',
       key: 'id'
-    }
+    },
+    field: 'user_id'
   },
-  businessName: {
+  company_name: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true
   },
-  email: {
-    type: DataTypes.STRING,
-    defaultValue: ''
-  },
-  phone: {
+  company_email: {
     type: DataTypes.STRING,
     defaultValue: ''
   },
-  address: {
+  company_phone: {
+    type: DataTypes.STRING,
+    defaultValue: ''
+  },
+  company_address: {
     type: DataTypes.TEXT,
     allowNull: true
   },
-  taxRate: {
+  company_logo: {
+    type: DataTypes.TEXT('long'),
+    allowNull: true
+  },
+  gst_number: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  pan_number: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  bank_name: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  account_number: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  ifsc_code: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  signature_image: {
+    type: DataTypes.TEXT('long'),
+    allowNull: true
+  },
+  tax_rate: {
     type: DataTypes.DECIMAL(5, 2),
-    defaultValue: 0.0,
-    validate: {
-      min: 0,
-      max: 100
-    }
+    defaultValue: 0
   },
   currency: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(10),
     defaultValue: 'INR'
-  },
-  logo: {
-    type: DataTypes.TEXT('long'),
-    allowNull: true,
-    comment: 'Base64 encoded company logo'
-  },
-  signature: {
-    type: DataTypes.TEXT('long'),
-    allowNull: true,
-    comment: 'Base64 encoded CEO signature'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  underscored: true,
+  tableName: 'business_profiles'
 });
 
-// Relationships
-BusinessProfile.belongsTo(User, { foreignKey: 'userId' });
-User.hasOne(BusinessProfile, { foreignKey: 'userId' });
+BusinessProfile.belongsTo(User, { foreignKey: 'user_id' });
+User.hasOne(BusinessProfile, { foreignKey: 'user_id' });
 
 module.exports = BusinessProfile;

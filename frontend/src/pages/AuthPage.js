@@ -1,107 +1,71 @@
-import { API } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import axios from "axios";
-import { DollarSign, Receipt } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { DollarSign, Lock, Mail, Receipt } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-export default function AuthPage({ setUser }) {
-  const [isLogin, setIsLogin] = useState(true);
+export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
-    business_name: ""
+    password: ""
   });
   const navigate = useNavigate();
-
+  const { login } = useAuth();
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const endpoint = isLogin ? "/auth/login" : "/auth/register";
-      const payload = isLogin
-        ? { email: formData.email, password: formData.password }
-        : formData;
+      // Login with Backend
+      const { error } = await login(formData.email, formData.password);
 
-      const response = await axios.post(`${API}${endpoint}`, payload);
-      const { access_token, user } = response.data;
-
-      localStorage.setItem("token", access_token);
-      localStorage.setItem("user", JSON.stringify(user));
-      setUser(user);
-
-      toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
-      navigate("/");
-    } catch (error) {
-      toast.error(error.response?.data?.detail || "An error occurred");
+      if (error) {
+        toast.error(error.message || "Login failed. Please check your credentials.");
+      } else {
+        toast.success("Welcome back!");
+        navigate("/");
+      }
+    } catch (err) {
+      toast.error("An unexpected error occurred");
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+      {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <DollarSign className="absolute top-20 left-10 text-sky-300 opacity-20 float-animation" size={80} />
-        <Receipt className="absolute bottom-20 right-10 text-purple-300 opacity-20 bill-flip-animation" size={80} />
-        <DollarSign className="absolute top-40 right-20 text-orange-300 opacity-20 float-animation" size={60} style={{ animationDelay: '1s' }} />
-        <Receipt className="absolute bottom-40 left-20 text-sky-300 opacity-20 bill-flip-animation" size={60} style={{ animationDelay: '0.5s' }} />
+        <DollarSign className="absolute top-20 left-10 text-sky-400 opacity-20 float-animation" size={80} />
+        <Receipt className="absolute bottom-20 right-10 text-purple-400 opacity-20 bill-flip-animation" size={80} />
+        <DollarSign className="absolute top-40 right-20 text-orange-400 opacity-20 float-animation" size={60} style={{ animationDelay: '1s' }} />
+        <Receipt className="absolute bottom-40 left-20 text-sky-400 opacity-20 bill-flip-animation" size={60} style={{ animationDelay: '0.5s' }} />
       </div>
 
-      <div className="glass rounded-3xl p-8 md:p-12 w-full max-w-md shadow-2xl relative z-10" data-testid="auth-container">
+      <div className="glass rounded-3xl p-8 md:p-12 w-full max-w-md shadow-2xl relative z-10 border border-white/40" data-testid="auth-container">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-sky-300 to-purple-300 rounded-2xl mb-4">
-            <Receipt className="text-white" size={32} />
+          <div className="inline-flex items-center justify-center mb-6 bg-white/50 p-6 rounded-3xl shadow-inner border border-white/50">
+            <img src="/favicon.png" alt="TS-Billing Logo" className="w-32 h-32 object-contain" />
           </div>
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">CashPulse</h1>
-          <p className="text-gray-600">Modern billing made simple</p>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-sky-600 to-purple-600 bg-clip-text text-transparent mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-gray-600">
+            Log in to manage your professional invoices
+          </p>
         </div>
 
-        <div className="flex gap-2 mb-6">
-          <Button
-            type="button"
-            variant={isLogin ? "default" : "outline"}
-            className="flex-1"
-            onClick={() => setIsLogin(true)}
-            data-testid="login-tab-btn"
-          >
-            Login
-          </Button>
-          <Button
-            type="button"
-            variant={!isLogin ? "default" : "outline"}
-            className="flex-1"
-            onClick={() => setIsLogin(false)}
-            data-testid="register-tab-btn"
-          >
-            Register
-          </Button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <div>
-              <Label htmlFor="business_name">Business Name</Label>
-              <Input
-                id="business_name"
-                type="text"
-                placeholder="Your Business Name"
-                value={formData.business_name}
-                onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
-                required={!isLogin}
-                className="mt-1"
-                data-testid="business-name-input"
-              />
-            </div>
-          )}
-
-          <div>
-            <Label htmlFor="email">Email</Label>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <Mail size={16} /> Email Address
+            </Label>
             <Input
               id="email"
               type="email"
@@ -109,13 +73,15 @@ export default function AuthPage({ setUser }) {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
-              className="mt-1"
+              className="bg-white/80 border-slate-200 focus:border-sky-400 focus:ring-sky-400 rounded-xl transition-all"
               data-testid="email-input"
             />
           </div>
 
-          <div>
-            <Label htmlFor="password">Password</Label>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <Lock size={16} /> Password
+            </Label>
             <Input
               id="password"
               type="password"
@@ -123,21 +89,53 @@ export default function AuthPage({ setUser }) {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required
-              className="mt-1"
+              className="bg-white/80 border-slate-200 focus:border-sky-400 focus:ring-sky-400 rounded-xl transition-all"
               data-testid="password-input"
             />
           </div>
 
           <Button
             type="submit"
-            className="w-full bg-gradient-to-r from-sky-400 to-purple-400 hover:from-sky-500 hover:to-purple-500 text-white"
+            className="w-full h-12 bg-gradient-to-r from-sky-500 to-purple-500 hover:from-sky-600 hover:to-purple-600 text-white rounded-xl font-bold shadow-lg shadow-sky-200 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
             disabled={loading}
             data-testid="submit-auth-btn"
           >
-            {loading ? "Loading..." : isLogin ? "Login" : "Create Account"}
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                Processing...
+              </span>
+            ) : (
+              "Log In"
+            )}
           </Button>
         </form>
+
+        <div className="mt-8 text-center border-t border-slate-100 pt-6">
+          <p className="text-sm text-gray-400 font-medium">
+            Professional Invoice Management System
+          </p>
+        </div>
       </div>
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        .glass {
+          background: rgba(255, 255, 255, 0.7);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0) rotate(0); }
+          50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        @keyframes bill-flip {
+          0%, 100% { transform: scale(1) rotate(0); }
+          50% { transform: scale(1.1) rotate(-5deg); }
+        }
+        .float-animation { animation: float 6s ease-in-out infinite; }
+        .bill-flip-animation { animation: bill-flip 8s ease-in-out infinite; }
+      `}} />
     </div>
   );
 }

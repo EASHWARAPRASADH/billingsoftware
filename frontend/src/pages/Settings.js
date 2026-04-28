@@ -1,14 +1,16 @@
-import { API } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import axios from "axios";
+import { useAuth } from "@/contexts/AuthContext";
+import { profileService } from "@/services/profileService";
+import { storageService } from "@/services/storageService";
 import { Save, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export default function Settings() {
+  const { refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,7 +18,7 @@ export default function Settings() {
     email: "",
     phone: "",
     address: "",
-    tax_rate: "",
+    tax_rate: "0",
     currency: "INR",
     logo: "",
     signature: ""
@@ -30,25 +32,39 @@ export default function Settings() {
 
   const fetchProfile = async () => {
     try {
-      const response = await axios.get(`${API}/profile`);
-      setFormData({
-        business_name: response.data.businessName || "",
-        email: response.data.email || "",
-        phone: response.data.phone || "",
-        address: response.data.address || "",
-        tax_rate: response.data.taxRate?.toString() || "0",
-        currency: response.data.currency || "INR",
-        logo: response.data.logo || "",
-        signature: response.data.signature || ""
-      });
+      const { data, error } = await profileService.get();
+
+      if (error) {
+        if (error.response?.status === 404) {
+          // New user, no profile yet
+          setLoading(false);
+          return;
+        }
+        throw error;
+      }
+
+      if (data) {
+        setFormData({
+          business_name: data.company_name || "",
+          email: data.company_email || "",
+          phone: data.company_phone || "",
+          address: data.company_address || "",
+          address: data.company_address || "",
+          tax_rate: data.tax_rate || "0",
+          currency: data.currency || "INR",
+          logo: data.company_logo || "",
+          signature: data.signature_image || ""
+        });
+      }
     } catch (error) {
+      console.error("Fetch profile error:", error);
       toast.error("Failed to load profile");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileUpload = (e, type) => {
+  const handleFileUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -62,11 +78,22 @@ export default function Settings() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData({ ...formData, [type]: reader.result });
-    };
-    reader.readAsDataURL(file);
+    try {
+      let result;
+      if (type === 'logo') {
+        result = await storageService.uploadCompanyLogo(file);
+      } else {
+        result = await storageService.uploadSignature(file);
+      }
+
+      if (result.error) throw result.error;
+
+      setFormData({ ...formData, [type]: result.url });
+      toast.success(`${type === 'logo' ? 'Logo' : 'Signature'} uploaded successfully`);
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload image");
+    }
   };
 
   const removeImage = (type) => {
@@ -85,20 +112,24 @@ export default function Settings() {
 
     try {
       const payload = {
-        businessName: formData.business_name,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        taxRate: parseFloat(formData.tax_rate) || 0,
-        currency: formData.currency,
-        logo: formData.logo,
-        signature: formData.signature
+        company_name: formData.business_name,
+        company_email: formData.email,
+        company_phone: formData.phone,
+        company_address: formData.address,
+        company_logo: formData.logo,
+        signature_image: formData.signature,
+        tax_rate: formData.tax_rate,
+        currency: formData.currency
       };
 
-      await axios.put(`${API}/profile`, payload);
+      const { error } = await profileService.update(payload);
+
+      if (error) throw error;
+      await refreshProfile();
       toast.success("Profile updated successfully");
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to update profile");
+      console.error("Update profile error:", error);
+      toast.error("Failed to update profile");
     } finally {
       setSaving(false);
     }

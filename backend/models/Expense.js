@@ -14,7 +14,8 @@ const Expense = sequelize.define('Expense', {
     references: {
       model: 'Users',
       key: 'id'
-    }
+    },
+    field: 'user_id'
   },
   category: {
     type: DataTypes.STRING,
@@ -23,28 +24,27 @@ const Expense = sequelize.define('Expense', {
   amount: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
-    validate: {
-      min: 0
-    }
+    validate: { min: 0 }
   },
   description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  expense_date: {
     type: DataTypes.STRING,
     allowNull: false
   },
-  expenseDate: {
+  receipt_url: {
     type: DataTypes.STRING,
-    allowNull: false
-  },
-  receiptUrl: {
-    type: DataTypes.STRING,
-    defaultValue: ''
+    allowNull: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  underscored: true,
+  tableName: 'expenses'
 });
 
-// Relationships
-Expense.belongsTo(User, { foreignKey: 'userId' });
-User.hasMany(Expense, { foreignKey: 'userId' });
+Expense.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(Expense, { foreignKey: 'user_id' });
 
 module.exports = Expense;
