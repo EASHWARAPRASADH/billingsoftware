@@ -1,10 +1,13 @@
 RewriteEngine On
 
-# Serve the React app for the root
-RewriteRule ^$ frontend/build/index.html [L]
+# 1. If the requested file or directory exists inside the frontend/build directory,
+# rewrite the request to serve it from there. This fixes the static CSS/JS 404/MIME errors.
+RewriteCond %{DOCUMENT_ROOT}/frontend/build%{REQUEST_URI} -f [OR]
+RewriteCond %{DOCUMENT_ROOT}/frontend/build%{REQUEST_URI} -d
+RewriteRule ^(.*)$ frontend/build/$1 [L]
 
-# Serve the React app for all other non-API routes that aren't files/dirs
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_URI} !^/api
-RewriteRule . frontend/build/index.html [L]
+# 2. Do not interfere with API requests. Let them pass through to Node.js.
+RewriteRule ^api/ - [L]
+
+# 3. For any other request (SPA routing), serve the React index.html.
+RewriteRule ^(.*)$ frontend/build/index.html [L]
