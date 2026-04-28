@@ -68,6 +68,16 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/products', productRoutes);
 
+// Debug endpoint
+app.get('/api/debug', (req, res) => {
+  res.json({
+    __dirname,
+    cwd: process.cwd(),
+    buildPath: path.join(__dirname, '../frontend/build'),
+    exists: require('fs').existsSync(path.join(__dirname, '../frontend/build', 'index.html'))
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
