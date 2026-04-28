@@ -1,0 +1,10 @@
+RewriteEngine On
+
+# Serve the React app for the root
+RewriteRule ^$ frontend/build/index.html [L]
+
+# Serve the React app for all other non-API routes that aren't files/dirs
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/api
+RewriteRule . frontend/build/index.html [L]
