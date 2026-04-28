@@ -111,6 +111,29 @@ export default function AuthPage() {
           </Button>
         </form>
 
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-200"></span>
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white/70 px-2 text-slate-400 font-semibold tracking-wider">Quick Access</span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setFormData({ email: "itsupport@technosprint.net", password: "Poland@01" })}
+              className="h-10 border-slate-200 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 rounded-xl transition-all flex items-center justify-center gap-2 text-sm font-medium text-slate-600"
+            >
+              <Mail size={14} className="opacity-70" />
+              Fill Support Credentials
+            </Button>
+          </div>
+        </div>
+
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
           <p className="text-sm text-gray-400 font-medium">
             Professional Invoice Management System
