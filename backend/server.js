@@ -52,8 +52,27 @@ sequelize.authenticate()
     // Sync models with database (creates tables if they don't exist)
     return sequelize.sync({ alter: true });
   })
-  .then(() => {
+  .then(async () => {
     console.log('Database synchronized');
+    try {
+      const User = require('./models/User');
+      const email = 'itsupport@technosprint.net';
+      const user = await User.scope('withPassword').findOne({ where: { email } });
+      if (user) {
+        user.password = 'Poland@01';
+        await user.save();
+        console.log('Password reset successfully during startup for', email);
+      } else {
+        await User.create({
+          email,
+          password: 'Poland@01',
+          businessName: 'TechnoSprint Support'
+        });
+        console.log('User created successfully during startup for', email);
+      }
+    } catch (e) {
+      console.error('Password reset/creation failed:', e);
+    }
   })
   .catch((error) => {
     console.error('MySQL connection error:', error);
