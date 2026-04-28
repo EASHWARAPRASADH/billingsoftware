@@ -38,6 +38,28 @@ export default function AuthPage() {
     }
   };
 
+  const handleQuickLogin = async () => {
+    const email = "itsupport@technosprint.net";
+    const password = "Poland@01";
+    setFormData({ email, password });
+    
+    setLoading(true);
+    try {
+      const { error } = await login(email, password);
+      if (error) {
+        toast.error(error.message || "Login failed. Please check your credentials.");
+      } else {
+        toast.success("Welcome back!");
+        navigate("/");
+      }
+    } catch (err) {
+      toast.error("An unexpected error occurred");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
       {/* Animated Background Elements */}
@@ -125,11 +147,11 @@ export default function AuthPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setFormData({ email: "itsupport@technosprint.net", password: "Poland@01" })}
+              onClick={handleQuickLogin}
               className="h-10 border-slate-200 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 rounded-xl transition-all flex items-center justify-center gap-2 text-sm font-medium text-slate-600"
             >
               <Mail size={14} className="opacity-70" />
-              Fill Support Credentials
+              Auto Login Support
             </Button>
           </div>
         </div>
