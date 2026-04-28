@@ -97,12 +97,12 @@ app.use((err, req, res, next) => {
 });
 
 // Serve static files from the React app
-app.use(express.static(path.join(__dirname, '../frontend/build')));
+app.use(express.static(path.resolve(__dirname, '..', 'frontend', 'build')));
 
 // Catch-all route to serve the React index.html for any non-API routes
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+    res.sendFile(path.resolve(__dirname, '..', 'frontend', 'build', 'index.html'));
   } else {
     res.status(404).json({ message: 'API route not found' });
   }
