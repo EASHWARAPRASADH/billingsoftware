@@ -77,6 +77,24 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Debug database route
+app.get('/api/debug-db', async (req, res) => {
+  try {
+    const [results] = await sequelize.query('SELECT COUNT(*) as count FROM users');
+    res.json({ 
+      status: 'DB OK', 
+      userCount: results[0].count,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    res.status(500).json({ 
+      status: 'DB Error', 
+      error: e.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
