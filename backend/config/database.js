@@ -5,7 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const sequelize = new Sequelize(
   process.env.DB_NAME || 'u841409365_billingnew',
   process.env.DB_USER || 'u841409365_billingnew',
-  process.env.DB_PASSWORD || process.env.DB_PASS || 'Eash@2005',
+  process.env.DB_PASSWORD || process.env.DB_PASS,
   {
     host: process.env.DB_HOST || '127.0.0.1',
     port: process.env.DB_PORT || 3306,
