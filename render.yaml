@@ -1,13 +1,12 @@
-# Render.com Deployment Configuration (Consolidated)
+# Render.com Deployment Configuration
+
 services:
   - type: web
-    name: billingsoftware
+    name: billmanagement-backend
     env: node
     region: oregon
     plan: free
-    # Build command: Installs all dependencies and builds the frontend
-    buildCommand: npm run build
-    # Start command: Runs the backend server (which also serves the frontend)
+    buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -15,25 +14,25 @@ services:
         value: production
       - key: PORT
         value: 10000
-      - key: DB_DIALECT
-        value: postgres
-      # This links the database created below to the web service
-      - key: DATABASE_URL
-        fromDatabase:
-          name: billingsoftware-db
-          property: connectionString
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: billmanagement
+      - key: DB_PORT
+        value: 3306
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://billingsoftware-o1d9.onrender.com
+        sync: false
 
-databases:
-  - name: billingsoftware-db
-    plan: free
-    region: oregon
-
-# Instructions for Render Dashboard:
-# 1. Connect your GitHub repository.
-# 2. Render will detect this render.yaml.
-# 3. Choose the "billingsoftware" blueprint.
-# 4. Once live, your database tables will be created automatically by Sequelize.
+# Instructions:
+# 1. Create a new Web Service on Render.com
+# 2. Connect your GitHub repository
+# 3. Set Root Directory to: backend
+# 4. Use this file or manually configure the settings above
+# 5. Add the environment variables in Render dashboard
+# 6. Deploy!

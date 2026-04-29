@@ -2,15 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from "@/contexts/AuthContext";
-import { profileService } from "@/services/profileService";
+import { supabase } from "@/config/supabase";
 import { storageService } from "@/services/storageService";
 import { Save, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export default function Settings() {
-  const { refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -32,16 +30,16 @@ export default function Settings() {
 
   const fetchProfile = async () => {
     try {
-      const { data, error } = await profileService.get();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-      if (error) {
-        if (error.response?.status === 404) {
-          // New user, no profile yet
-          setLoading(false);
-          return;
-        }
-        throw error;
-      }
+      const { data, error } = await supabase
+        .from('business_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
         setFormData({
@@ -49,9 +47,8 @@ export default function Settings() {
           email: data.company_email || "",
           phone: data.company_phone || "",
           address: data.company_address || "",
-          address: data.company_address || "",
-          tax_rate: data.tax_rate || "0",
-          currency: data.currency || "INR",
+          tax_rate: "0", // Not currently in DB schema
+          currency: "INR", // Not currently in DB schema
           logo: data.company_logo || "",
           signature: data.signature_image || ""
         });
@@ -111,21 +108,25 @@ export default function Settings() {
     setSaving(true);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const payload = {
+        user_id: user.id,
         company_name: formData.business_name,
         company_email: formData.email,
         company_phone: formData.phone,
         company_address: formData.address,
         company_logo: formData.logo,
         signature_image: formData.signature,
-        tax_rate: formData.tax_rate,
-        currency: formData.currency
+        updated_at: new Date().toISOString()
       };
 
-      const { error } = await profileService.update(payload);
+      const { error } = await supabase
+        .from('business_profiles')
+        .upsert(payload, { onConflict: 'user_id' });
 
       if (error) throw error;
-      await refreshProfile();
       toast.success("Profile updated successfully");
     } catch (error) {
       console.error("Update profile error:", error);
@@ -195,8 +196,11 @@ export default function Settings() {
                 max="100"
                 step="0.01"
                 className="mt-1"
+                disabled
+                title="Tax rate setting not currently supported in database"
                 data-testid="tax-rate-input"
               />
+              <p className="text-xs text-yellow-600 mt-1">Global tax rate setting currently unavailable</p>
             </div>
           </div>
 

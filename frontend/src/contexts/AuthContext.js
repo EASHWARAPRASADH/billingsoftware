@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import api from '../config/api';
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext({});
 
@@ -12,14 +12,39 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState({ id: 1, email: 'itsupport@technosprint.net' });
-    const [profile, setProfile] = useState({ businessName: 'Techno Sprint', currency: 'INR' });
-    const [loading, setLoading] = useState(false);
-    const [currencySymbol, setCurrencySymbol] = useState('₹');
+    const [user, setUser] = useState(null);
+    const [session, setSession] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Auth is now removed/bypassed
-        setLoading(false);
+        // Get initial session
+        const initializeAuth = async () => {
+            try {
+                const { data: { session: initialSession } } = await supabase.auth.getSession();
+                setSession(initialSession);
+                setUser(initialSession?.user ?? null);
+            } catch (error) {
+                console.error('Error initializing auth:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        initializeAuth();
+
+        // Listen for auth state changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (event, currentSession) => {
+                console.log('Auth state changed:', event);
+                setSession(currentSession);
+                setUser(currentSession?.user ?? null);
+                setLoading(false);
+            }
+        );
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     /**
@@ -27,43 +52,55 @@ export const AuthProvider = ({ children }) => {
      */
     const signUp = async (email, password, businessName) => {
         try {
-            const response = await api.post('/auth/register', {
+            const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
-                businessName
+                options: {
+                    data: {
+                        business_name: businessName
+                    }
+                }
             });
 
-            const { access_token, user: userData } = response.data;
-            localStorage.setItem('token', access_token);
-            setUser(userData);
+            if (error) throw error;
 
-            return { data: response.data, error: null };
+            // Create user profile after successful signup
+            if (data.user) {
+                const { error: profileError } = await supabase
+                    .from('user_profiles')
+                    .insert({
+                        id: data.user.id,
+                        business_name: businessName
+                    });
+
+                if (profileError) {
+                    console.error('Error creating user profile:', profileError);
+                }
+            }
+
+            return { data, error: null };
         } catch (error) {
             console.error('Sign up error:', error);
-            const message = error.response?.data?.message || 'Registration failed';
-            return { data: null, error: { message } };
+            return { data: null, error };
         }
     };
 
     /**
-     * Login existing user
+     * Sign in existing user
      */
-    const login = async (email, password) => {
+    const signIn = async (email, password) => {
         try {
-            const response = await api.post('/auth/login', {
+            const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password
             });
 
-            const { access_token, user: userData } = response.data;
-            localStorage.setItem('token', access_token);
-            setUser(userData);
+            if (error) throw error;
 
-            return { data: response.data, error: null };
+            return { data, error: null };
         } catch (error) {
             console.error('Sign in error:', error);
-            const message = error.response?.data?.message || 'Invalid email or password';
-            return { data: null, error: { message } };
+            return { data: null, error };
         }
     };
 
@@ -72,8 +109,12 @@ export const AuthProvider = ({ children }) => {
      */
     const signOut = async () => {
         try {
-            localStorage.removeItem('token');
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+
             setUser(null);
+            setSession(null);
+
             return { error: null };
         } catch (error) {
             console.error('Sign out error:', error);
@@ -82,13 +123,19 @@ export const AuthProvider = ({ children }) => {
     };
 
     /**
-     * Reset password (Placeholder for backend implementation)
+     * Reset password
      */
     const resetPassword = async (email) => {
         try {
-            // Backend endpoint needed for this
-            return { data: null, error: { message: 'Reset password not implemented on backend yet' } };
+            const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`
+            });
+
+            if (error) throw error;
+
+            return { data, error: null };
         } catch (error) {
+            console.error('Reset password error:', error);
             return { data: null, error };
         }
     };
@@ -98,10 +145,13 @@ export const AuthProvider = ({ children }) => {
      */
     const updatePassword = async (newPassword) => {
         try {
-            const response = await api.put('/auth/update-password', {
+            const { data, error } = await supabase.auth.updateUser({
                 password: newPassword
             });
-            return { data: response.data, error: null };
+
+            if (error) throw error;
+
+            return { data, error: null };
         } catch (error) {
             console.error('Update password error:', error);
             return { data: null, error };
@@ -112,42 +162,18 @@ export const AuthProvider = ({ children }) => {
      * Get access token for API calls
      */
     const getAccessToken = () => {
-        return localStorage.getItem('token');
-    };
-
-    const getSymbol = (currency) => {
-        switch (currency) {
-            case 'USD': return '$';
-            case 'EUR': return '€';
-            case 'GBP': return '£';
-            case 'INR': return '₹';
-            default: return '₹';
-        }
-    };
-
-    const refreshProfile = async () => {
-        try {
-            const profileResponse = await api.get('/profile');
-            if (profileResponse.data) {
-                setProfile(profileResponse.data);
-                setCurrencySymbol(getSymbol(profileResponse.data.currency));
-            }
-        } catch (error) {
-            console.error('Error refreshing profile:', error);
-        }
+        return session?.access_token ?? null;
     };
 
     const value = {
         user,
-        profile,
-        currencySymbol,
+        session,
         loading,
         signUp,
-        login,
+        signIn,
         signOut,
         resetPassword,
         updatePassword,
-        refreshProfile,
         getAccessToken,
         isAuthenticated: !!user
     };

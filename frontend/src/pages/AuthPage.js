@@ -14,38 +14,16 @@ export default function AuthPage() {
     password: ""
   });
   const navigate = useNavigate();
-  const { login } = useAuth();
-  
+  const { signIn } = useAuth();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Login with Backend
-      const { error } = await login(formData.email, formData.password);
+      // Login with Supabase
+      const { error } = await signIn(formData.email, formData.password);
 
-      if (error) {
-        toast.error(error.message || "Login failed. Please check your credentials.");
-      } else {
-        toast.success("Welcome back!");
-        navigate("/");
-      }
-    } catch (err) {
-      toast.error("An unexpected error occurred");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickLogin = async () => {
-    const email = "itsupport@technosprint.net";
-    const password = "Poland@01";
-    setFormData({ email, password });
-    
-    setLoading(true);
-    try {
-      const { error } = await login(email, password);
       if (error) {
         toast.error(error.message || "Login failed. Please check your credentials.");
       } else {
@@ -72,8 +50,8 @@ export default function AuthPage() {
 
       <div className="glass rounded-3xl p-8 md:p-12 w-full max-w-md shadow-2xl relative z-10 border border-white/40" data-testid="auth-container">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-6 bg-white/50 p-6 rounded-3xl shadow-inner border border-white/50">
-            <img src="/favicon.png" alt="TS-Billing Logo" className="w-32 h-32 object-contain" />
+          <div className="inline-flex items-center justify-center mb-4 bg-white/50 p-4 rounded-2xl shadow-inner border border-white/50">
+            <img src="/favicon.png" alt="TS-Billing Logo" className="w-16 h-16 object-contain" />
           </div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-sky-600 to-purple-600 bg-clip-text text-transparent mb-2">
             Welcome Back
@@ -132,29 +110,6 @@ export default function AuthPage() {
             )}
           </Button>
         </form>
-
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-slate-200"></span>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white/70 px-2 text-slate-400 font-semibold tracking-wider">Quick Access</span>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleQuickLogin}
-              className="h-10 border-slate-200 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 rounded-xl transition-all flex items-center justify-center gap-2 text-sm font-medium text-slate-600"
-            >
-              <Mail size={14} className="opacity-70" />
-              Auto Login Support
-            </Button>
-          </div>
-        </div>
 
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
           <p className="text-sm text-gray-400 font-medium">

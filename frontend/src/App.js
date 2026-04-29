@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 // API Configuration
-export const API = process.env.REACT_APP_API_URL || 'http://localhost:12345/api';
+export const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 // Pages
 import Layout from "@/components/Layout";
@@ -21,8 +21,17 @@ import TaxReports from "@/pages/TaxReports";
 
 // Protected Route Component
 function PrivateRoute({ children }) {
-  // Bypassing auth: Always render children
-  return children;
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  return user ? children : <Navigate to="/auth" />;
 }
 
 // App Content Component
@@ -106,21 +115,21 @@ function AppContent() {
             }
           />
           <Route
-            path="/payment-status"
-            element={
-              <PrivateRoute>
-                <Layout user={user}>
-                  <PaymentStatus />
-                </Layout>
-              </PrivateRoute>
-            }
-          />
-          <Route
             path="/tax-reports"
             element={
               <PrivateRoute>
                 <Layout user={user}>
                   <TaxReports />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/payment-status"
+            element={
+              <PrivateRoute>
+                <Layout user={user}>
+                  <PaymentStatus />
                 </Layout>
               </PrivateRoute>
             }

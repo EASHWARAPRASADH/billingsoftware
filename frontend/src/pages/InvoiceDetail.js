@@ -10,16 +10,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/config/supabase";
 import { invoiceService } from "@/services/invoiceService";
-import { profileService } from "@/services/profileService";
 import { ArrowLeft, Download, Edit, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function InvoiceDetail() {
-  const { currencySymbol } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState(null);
@@ -58,22 +56,23 @@ export default function InvoiceDetail() {
       setInvoice(mappedInvoice);
 
       // Fetch Profile
-      const { data: profileData, error: profileError } = await profileService.get();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profileData, error: profileError } = await supabase
+          .from('business_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
 
-      if (!profileError && profileData) {
-        setProfile({
-          businessName: profileData.company_name,
-          email: profileData.company_email,
-          phone: profileData.company_phone,
-          address: profileData.company_address,
-          logo: profileData.company_logo,
-          signature: profileData.signature_image,
-          bankName: profileData.bank_name,
-          accountNumber: profileData.account_number,
-          ifscCode: profileData.ifsc_code,
-          gstNumber: profileData.gst_number,
-          panNumber: profileData.pan_number
-        });
+        if (!profileError && profileData) {
+          setProfile({
+            businessName: profileData.company_name,
+            email: profileData.company_email,
+            phone: profileData.company_phone,
+            address: profileData.company_address,
+            // Add other fields as needed
+          });
+        }
       }
 
     } catch (error) {
@@ -181,10 +180,6 @@ export default function InvoiceDetail() {
               {profile?.email && <p className="text-gray-600">{profile.email}</p>}
               {profile?.phone && <p className="text-gray-600">{profile.phone}</p>}
               {profile?.address && <p className="text-gray-600">{profile.address}</p>}
-              <div className="mt-2 flex gap-4 text-xs font-semibold text-gray-500 uppercase">
-                {profile?.gstNumber && <span>GST: {profile.gstNumber}</span>}
-                {profile?.panNumber && <span>PAN: {profile.panNumber}</span>}
-              </div>
             </div>
           </div>
           <div className="text-right">
@@ -234,8 +229,8 @@ export default function InvoiceDetail() {
                   <td className="py-3">{item.description}</td>
                   <td className="py-3">{item.hsn || '-'}</td>
                   <td className="text-right py-3">{item.quantity}</td>
-                  <td className="text-right py-3">{currencySymbol}{parseFloat(item.rate || 0).toFixed(2)}</td>
-                  <td className="text-right py-3 font-semibold">{currencySymbol}{parseFloat(item.amount || 0).toFixed(2)}</td>
+                  <td className="text-right py-3">₹{parseFloat(item.rate || 0).toFixed(2)}</td>
+                  <td className="text-right py-3 font-semibold">₹{parseFloat(item.amount || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -248,13 +243,13 @@ export default function InvoiceDetail() {
             {parseFloat(invoice.subtotal || 0) > 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Sub Total:</span>
-                <span className="font-semibold" data-testid="invoice-subtotal">{currencySymbol}{parseFloat(invoice.subtotal || 0).toFixed(2)}</span>
+                <span className="font-semibold" data-testid="invoice-subtotal">₹{parseFloat(invoice.subtotal || 0).toFixed(2)}</span>
               </div>
             )}
             {parseFloat(invoice.shippingCost || 0) > 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Shipping cost:</span>
-                <span className="font-semibold" data-testid="invoice-shipping">{currencySymbol}{parseFloat(invoice.shippingCost).toFixed(2)}</span>
+                <span className="font-semibold" data-testid="invoice-shipping">₹{parseFloat(invoice.shippingCost).toFixed(2)}</span>
               </div>
             )}
             {parseFloat(invoice.tax || 0) > 0 && (
@@ -265,64 +260,39 @@ export default function InvoiceDetail() {
                     ` (${parseFloat(((parseFloat(invoice.tax || 0) / parseFloat(invoice.subtotal || 0)) * 100).toFixed(2))}%)`}
                   :
                 </span>
-                <span className="font-semibold" data-testid="invoice-tax">{currencySymbol}{parseFloat(invoice.tax || 0).toFixed(2)}</span>
+                <span className="font-semibold" data-testid="invoice-tax">₹{parseFloat(invoice.tax || 0).toFixed(2)}</span>
               </div>
             )}
             {parseFloat(invoice.couponDiscount || 0) > 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Coupon Discount:</span>
-                <span className="font-semibold" data-testid="invoice-discount">{currencySymbol}{parseFloat(invoice.couponDiscount).toFixed(2)}</span>
+                <span className="font-semibold" data-testid="invoice-discount">₹{parseFloat(invoice.couponDiscount).toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between text-xl font-bold border-t-2 pt-2">
               <span>Grand Total:</span>
-              <span data-testid="invoice-total">{currencySymbol}{parseFloat(invoice.total || 0).toFixed(2)}</span>
+              <span data-testid="invoice-total">₹{parseFloat(invoice.total || 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
 
         {/* Notes */}
         {invoice.notes && (
-          <div className="pt-4 border-t mb-6">
+          <div className="pt-4 border-t">
             <h4 className="text-sm font-semibold text-gray-600 mb-2">NOTES:</h4>
             <p className="text-gray-700 whitespace-pre-wrap">{invoice.notes}</p>
           </div>
         )}
 
-        {/* Payment Information */}
-        <div className="pt-6 border-t grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-            <h4 className="text-sm font-bold text-sky-800 mb-3 uppercase tracking-wider">Payment Information</h4>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Bank Name:</span>
-                <span className="font-semibold text-gray-800">{profile?.bankName || "Not Specified"}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Account No:</span>
-                <span className="font-semibold text-gray-800">{profile?.accountNumber || "Not Specified"}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">IFSC Code:</span>
-                <span className="font-semibold text-gray-800">{profile?.ifscCode || "Not Specified"}</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col justify-end text-right italic text-gray-400 text-xs">
-            <p>Please use Invoice Number as payment reference.</p>
-            <p>Thank you for your business!</p>
-          </div>
-        </div>
-
         {/* Auto Placement: Signature */}
         <div className="invoice-footer">
           <div className="signature-container">
-            <img src={profile?.signature || "/images/CEO-Sign.png"} alt="CEO Signature" className="signature-right" onError={(e) => { e.target.style.display = 'none' }} />
+            <img src="/images/CEO-Sign.png" alt="CEO Signature" className="signature-right" onError={(e) => { e.target.style.display = 'none' }} />
             <div className="signature-text">
               <p className="signature-name">Arun G</p>
               <p className="signature-title">CHIEF EXECUTIVE OFFICER</p>
               <p className="signature-auth">AUTHORISED SIGNATORY BY</p>
-              <p className="signature-company">{profile?.businessName || "Technosprint Info Solutions"}</p>
+              <p className="signature-company">Technosprint Info Solutions</p>
             </div>
           </div>
         </div>

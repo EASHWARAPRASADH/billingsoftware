@@ -27,7 +27,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from "@/contexts/AuthContext";
 import { expenseService } from "@/services/expenseService";
 import { Edit, Plus, Receipt, Search, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -283,7 +282,7 @@ export default function Expenses() {
           </div>
           <div className="text-right">
             <p className="text-sm text-gray-600">Total Expenses</p>
-            <p className="text-2xl font-bold text-gray-800" data-testid="total-expenses-display">{currencySymbol}{totalExpenses.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-gray-800" data-testid="total-expenses-display">₹{totalExpenses.toFixed(2)}</p>
           </div>
         </div>
       </div>
@@ -316,7 +315,7 @@ export default function Expenses() {
                   <p className="font-semibold text-gray-800">{expense.description}</p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <p className="text-xl font-bold text-gray-800">{currencySymbol}{parseFloat(expense.amount).toFixed(2)}</p>
+                  <p className="text-xl font-bold text-gray-800">₹{parseFloat(expense.amount).toFixed(2)}</p>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)} data-testid={`edit-expense-${expense.id}-btn`}>
                       <Edit size={16} className="text-blue-500" />

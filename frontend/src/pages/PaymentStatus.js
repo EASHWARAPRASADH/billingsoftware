@@ -2,13 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { invoiceService } from "@/services/invoiceService";
-import { CreditCard, Search, ExternalLink } from "lucide-react";
+import { Search, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function PaymentStatus() {
-  const { currencySymbol } = useAuth();
+  const { user } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -41,6 +41,19 @@ export default function PaymentStatus() {
     return <div className="skeleton h-96 rounded-2xl"></div>;
   }
 
+  // Calculate totals
+  const totalReceived = invoices.reduce((sum, inv) => {
+      // If status is paid, assume full amount is received if field is missing
+      const received = parseFloat(inv.amount_received || (inv.status === 'paid' ? inv.total_amount : 0));
+      return sum + received;
+  }, 0);
+
+  const totalPending = invoices.reduce((sum, inv) => {
+      const total = parseFloat(inv.total_amount || 0);
+      const received = parseFloat(inv.amount_received || (inv.status === 'paid' ? inv.total_amount : 0));
+      return sum + (total - received);
+  }, 0);
+
   return (
     <div className="space-y-6 fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -55,13 +68,13 @@ export default function PaymentStatus() {
         <div className="glass rounded-2xl p-6">
           <p className="text-sm font-medium text-gray-500">Total Received</p>
           <h3 className="text-2xl font-bold text-green-600">
-            {currencySymbol}{invoices.reduce((sum, inv) => sum + parseFloat(inv.amount_received || 0), 0).toFixed(2)}
+            ₹{totalReceived.toFixed(2)}
           </h3>
         </div>
         <div className="glass rounded-2xl p-6">
           <p className="text-sm font-medium text-gray-500">Total Pending</p>
           <h3 className="text-2xl font-bold text-red-500">
-            {currencySymbol}{invoices.reduce((sum, inv) => sum + (parseFloat(inv.total_amount) - parseFloat(inv.amount_received || 0)), 0).toFixed(2)}
+            ₹{totalPending.toFixed(2)}
           </h3>
         </div>
         <div className="glass rounded-2xl p-6">
@@ -103,7 +116,7 @@ export default function PaymentStatus() {
             <tbody>
               {filteredInvoices.map((invoice) => {
                 const total = parseFloat(invoice.total_amount || 0);
-                const received = parseFloat(invoice.amount_received || 0);
+                const received = parseFloat(invoice.amount_received || (invoice.status === 'paid' ? total : 0));
                 const pending = total - received;
 
                 return (
@@ -119,8 +132,8 @@ export default function PaymentStatus() {
                         {invoice.status}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right font-semibold text-green-600">{currencySymbol}{received.toFixed(2)}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-red-500">{currencySymbol}{pending.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-green-600">₹{received.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-red-500">₹{pending.toFixed(2)}</td>
                     <td className="py-3 px-4 text-center">
                       <Link to={`/invoices/${invoice.id}`}>
                         <Button variant="ghost" size="sm">

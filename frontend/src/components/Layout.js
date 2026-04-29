@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useAuth } from "@/contexts/AuthContext";
 import { BarChart3, Calculator, CreditCard, FileText, LayoutDashboard, LogOut, Menu, Receipt, Settings } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -11,10 +10,9 @@ export default function Layout({ children, user }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
-  const { signOut } = useAuth();
-
-  const handleLogout = async () => {
-    await signOut();
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     toast.success("Logged out successfully");
     navigate("/auth");
   };
@@ -24,8 +22,8 @@ export default function Layout({ children, user }) {
     { path: "/invoices", icon: FileText, label: "Invoices", testId: "nav-invoices" },
     { path: "/expenses", icon: Receipt, label: "Expenses", testId: "nav-expenses" },
     { path: "/analytics", icon: BarChart3, label: "Analytics", testId: "nav-analytics" },
-    { path: "/payment-status", icon: CreditCard, label: "Payment Status", testId: "nav-payment-status" },
     { path: "/tax-reports", icon: Calculator, label: "Tax Reports", testId: "nav-tax-reports" },
+    { path: "/payment-status", icon: CreditCard, label: "Payment Status", testId: "nav-payment-status" },
     { path: "/settings", icon: Settings, label: "Settings", testId: "nav-settings" }
   ];
 

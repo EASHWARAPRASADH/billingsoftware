@@ -7,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
 import { invoiceService } from "@/services/invoiceService";
 import { FileText, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -15,7 +14,6 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function Invoices() {
-  const { currencySymbol } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -134,7 +132,7 @@ export default function Invoices() {
                     <td className="py-3 px-4">{invoice.clientName}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{invoice.issueDate}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{invoice.dueDate}</td>
-                    <td className="py-3 px-4 font-semibold">{currencySymbol}{parseFloat(invoice.total || 0).toFixed(2)}</td>
+                    <td className="py-3 px-4 font-semibold">₹{parseFloat(invoice.total || 0).toFixed(2)}</td>
                     <td className="py-3 px-4">
                       <span className={`text-xs px-3 py-1 rounded-full status-${invoice.status}`}>
                         {invoice.status}

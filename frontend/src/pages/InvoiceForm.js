@@ -53,7 +53,6 @@ export default function InvoiceForm() {
     dueDate: "",
     status: "draft",
     notes: "",
-    amountReceived: 0,
     items: [
       { description: "", quantity: 1, rate: 0, amount: 0, hsn: "" }
     ]
@@ -110,13 +109,17 @@ export default function InvoiceForm() {
 
   const fetchProfile = async () => {
     try {
-      const { data, error } = await profileService.get();
-      if (data) {
-        const globalTaxRate = data.tax_rate || 0;
-        if (!taxValue && !isEdit) {
-          setTaxValue(globalTaxRate.toString());
-          setIsTaxPercentage(true);
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from('business_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        // Note: tax_rate is not in the schema currently, defaulting to 18 if we want GST support
+        // For now keep it 0 unless we add it to the table
+        // setTaxRate(0); // If you add tax_rate column later: data.tax_rate || 0
       }
     } catch (error) {
       console.error("Failed to load profile", error);
@@ -166,7 +169,6 @@ export default function InvoiceForm() {
         dueDate: invoice.due_date,
         status: invoice.status,
         notes: invoice.notes,
-        amountReceived: parseFloat(invoice.amount_received || 0),
         items: Array.isArray(invoice.items) ? invoice.items : JSON.parse(invoice.items || '[]')
       });
 
@@ -285,9 +287,8 @@ export default function InvoiceForm() {
     const shipping = parseFloat(shippingCost) || 0;
     const discount = parseFloat(couponDiscount) || 0;
     const total = subtotal + shipping + tax - discount;
-    const pending = total - (parseFloat(formData.amountReceived) || 0);
 
-    return { subtotal, tax, total, shippingCost: shipping, couponDiscount: discount, pending };
+    return { subtotal, tax, total, shippingCost: shipping, couponDiscount: discount };
   };
 
   const handleSubmit = async (e) => {
@@ -313,8 +314,7 @@ export default function InvoiceForm() {
         total_amount: total,
         notes: formData.notes,
         terms: "", // Add if input exists
-        status: formData.status,
-        amount_received: parseFloat(formData.amountReceived) || 0
+        status: formData.status
       };
 
       if (isEdit) {
@@ -438,18 +438,6 @@ export default function InvoiceForm() {
                   <SelectItem value="overdue">Overdue</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label htmlFor="amountReceived">Amount Received (₹)</Label>
-              <Input
-                id="amountReceived"
-                type="number"
-                value={formData.amountReceived}
-                onChange={(e) => setFormData({ ...formData, amountReceived: e.target.value })}
-                className="mt-1"
-                min="0"
-                step="0.01"
-              />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -770,10 +758,6 @@ export default function InvoiceForm() {
             <div className="flex justify-between text-lg font-bold border-t pt-2">
               <span>Grand Total:</span>
               <span data-testid="total-display">₹{total.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm font-medium text-red-500 pt-1">
-              <span>Amount Pending:</span>
-              <span>₹{(total - (parseFloat(formData.amountReceived) || 0)).toFixed(2)}</span>
             </div>
           </div>
         </div>

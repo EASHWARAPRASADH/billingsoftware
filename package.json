@@ -6,15 +6,9 @@
     "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "backend": "cd backend && node server.js",
     "frontend": "cd frontend && npm start",
-    "build": "npm run install-all && cd frontend && npm run build",
-    "start": "npm run backend",
     "dev": "npx concurrently \"npm run backend\" \"npm run frontend\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.105.0",
-    "dotenv": "^17.4.2"
   }
 }

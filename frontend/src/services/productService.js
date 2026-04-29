@@ -1,8 +1,7 @@
-
-import api from '../config/api';
+import { supabase } from '../config/supabase';
 
 /**
- * Product Service - Handles all product-related operations with the Backend API
+ * Product Service - Handles all product-related operations with Supabase
  */
 export const productService = {
     /**
@@ -10,11 +9,20 @@ export const productService = {
      */
     async getAll() {
         try {
-            const response = await api.get('/products');
-            return { data: response.data, error: null };
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('User not authenticated');
+
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('name', { ascending: true });
+
+            if (error) throw error;
+            return { data: data || [], error: null };
         } catch (error) {
             console.error('Error fetching products:', error);
-            return { data: null, error };
+            return { data: [], error };
         }
     },
 
@@ -23,24 +31,25 @@ export const productService = {
      */
     async create(productData) {
         try {
-            const response = await api.post('/products', productData);
-            return { data: response.data, error: null };
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('User not authenticated');
+
+            const { data, error } = await supabase
+                .from('products')
+                .insert({
+                    ...productData,
+                    user_id: user.id,
+                    gst_rate: parseFloat(productData.gst_rate) || 0,
+                    hsn_code: productData.hsn_code || ''
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { data, error: null };
         } catch (error) {
             console.error('Error creating product:', error);
             return { data: null, error };
-        }
-    },
-
-    /**
-     * Delete a product
-     */
-    async delete(id) {
-        try {
-            await api.delete(`/products/${id}`);
-            return { error: null };
-        } catch (error) {
-            console.error('Error deleting product:', error);
-            return { error };
         }
     }
 };

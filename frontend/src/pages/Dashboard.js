@@ -9,11 +9,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 export default function Dashboard() {
-  const { currencySymbol } = useAuth();
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD format
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [monthlyData, setMonthlyData] = useState([]);
@@ -37,23 +36,16 @@ export default function Dashboard() {
       const invoices = invoicesRes.data || [];
       const expenses = expensesRes.data || [];
 
-      console.log(`Filtering for range: ${startDate} to ${endDate}`);
-      console.log(`Found ${invoices.length} total invoices, ${expenses.length} total expenses`);
-
-      // Filter by date range (robust check)
+      // Filter by date range
       const filteredInvoices = invoices.filter(inv => {
-        const date = (inv.invoice_date || "").split(' ')[0]; // Handle YYYY-MM-DD or YYYY-MM-DD HH:mm:ss
-        const isMatch = date >= startDate && date <= endDate;
-        return isMatch;
+        const date = (inv.invoice_date || "").split(' ')[0];
+        return date >= startDate && date <= endDate;
       });
 
       const filteredExpenses = expenses.filter(exp => {
         const date = (exp.expense_date || "").split(' ')[0];
-        const isMatch = date >= startDate && date <= endDate;
-        return isMatch;
+        return date >= startDate && date <= endDate;
       });
-
-      console.log(`Filtered: ${filteredInvoices.length} invoices, ${filteredExpenses.length} expenses`);
 
       // Calculate stats
       const totalRevenue = filteredInvoices
@@ -104,7 +96,7 @@ export default function Dashboard() {
           clientName: inv.client_name,
           total: inv.total_amount,
           status: inv.status,
-          createdAt: inv.created_at || inv.createdAt,
+          createdAt: inv.created_at,
           issueDate: inv.invoice_date,
           dueDate: inv.due_date
         })),
@@ -130,7 +122,6 @@ export default function Dashboard() {
     );
   }
 
-  // Safety check
   if (!stats) {
     return (
       <div className="space-y-6 fade-in bg-gray-50 -m-8 p-8 min-h-screen">
@@ -147,22 +138,19 @@ export default function Dashboard() {
     );
   }
 
-  // Calculate stats from actual invoice and expense data
   const totalRevenue = stats.totalRevenue || 0;
   const totalExpenses = stats.totalExpenses || 0;
   const totalInvoices = stats.recentInvoices?.length || 0;
 
-  // Calculate percentages based on actual data
-  const maxRevenue = Math.max(totalRevenue * 1.2, 10000); // Dynamic max based on actual revenue
+  const maxRevenue = Math.max(totalRevenue * 1.2, 10000);
   const revenuePercentage = Math.min(Math.round((totalRevenue / maxRevenue) * 100), 100);
 
-  const maxExpenses = Math.max(totalExpenses * 1.2, 5000); // Dynamic max based on actual expenses
+  const maxExpenses = Math.max(totalExpenses * 1.2, 5000);
   const expensesPercentage = Math.min(Math.round((totalExpenses / maxExpenses) * 100), 100);
 
-  const maxInvoices = Math.max(totalInvoices * 1.2, 10); // Dynamic max based on actual invoices
+  const maxInvoices = Math.max(totalInvoices * 1.2, 10);
   const invoicesPercentage = Math.min(Math.round((totalInvoices / maxInvoices) * 100), 100);
 
-  // CircularProgress component
   const CircularProgress = ({ percentage, color = "#FF6B6B" }) => {
     const radius = 28;
     const circumference = 2 * Math.PI * radius;
@@ -171,14 +159,7 @@ export default function Dashboard() {
     return (
       <div className="relative w-16 h-16">
         <svg className="transform -rotate-90" width="64" height="64">
-          <circle
-            cx="32"
-            cy="32"
-            r={radius}
-            stroke="#f3f4f6"
-            strokeWidth="6"
-            fill="none"
-          />
+          <circle cx="32" cy="32" r={radius} stroke="#f3f4f6" strokeWidth="6" fill="none" />
           <circle
             cx="32"
             cy="32"
@@ -206,7 +187,7 @@ export default function Dashboard() {
           Welcome to the TS-Billing
         </h1>
         <div className="flex items-center gap-3">
-          {/* Date Picker Range */}
+          {/* Date Range Picker */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 cursor-pointer">
               <span className="text-[10px] uppercase text-gray-400 font-bold">Start</span>
@@ -250,7 +231,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
               <p className="text-xs text-gray-500 mb-3">Total revenue from paid invoices</p>
-              <p className="text-2xl font-bold text-gray-900">{currencySymbol}{totalRevenue.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">₹{totalRevenue.toFixed(2)}</p>
             </div>
             <CircularProgress percentage={revenuePercentage} color="#10B981" />
           </div>
@@ -258,8 +239,7 @@ export default function Dashboard() {
             onClick={() => navigate('/analytics')}
             className="w-full mt-4 bg-blue-500 text-white text-sm py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2 transition-colors"
           >
-            See all reports
-            <ArrowRight size={16} />
+            See all reports <ArrowRight size={16} />
           </button>
         </div>
 
@@ -269,7 +249,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Expenses</p>
               <p className="text-xs text-gray-500 mb-3">Total expenses recorded</p>
-              <p className="text-2xl font-bold text-gray-900">{currencySymbol}{totalExpenses.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">₹{totalExpenses.toFixed(2)}</p>
             </div>
             <CircularProgress percentage={expensesPercentage} color="#EF4444" />
           </div>
@@ -277,8 +257,7 @@ export default function Dashboard() {
             onClick={() => navigate('/expenses')}
             className="w-full mt-4 bg-blue-500 text-white text-sm py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2 transition-colors"
           >
-            See all reports
-            <ArrowRight size={16} />
+            See all reports <ArrowRight size={16} />
           </button>
         </div>
 
@@ -296,8 +275,7 @@ export default function Dashboard() {
             onClick={() => navigate('/invoices')}
             className="w-full mt-4 bg-blue-500 text-white text-sm py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2 transition-colors"
           >
-            See all reports
-            <ArrowRight size={16} />
+            See all reports <ArrowRight size={16} />
           </button>
         </div>
       </div>
@@ -310,27 +288,12 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  dy={10}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  tickFormatter={(value) => `${currencySymbol}${value}`}
-                />
-                <Tooltip 
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} tickFormatter={(v) => `₹${v}`} />
+                <Tooltip
                   cursor={{ fill: '#f9fafb' }}
-                  contentStyle={{ 
-                    borderRadius: '8px', 
-                    border: 'none', 
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
-                  }}
-                  formatter={(value) => [`${currencySymbol}${value.toFixed(2)}`, '']}
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(v) => [`₹${v.toFixed(2)}`, '']}
                 />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
                 <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={32} />
@@ -338,9 +301,7 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-              No data available for the selected range
-            </div>
+            <div className="h-full flex items-center justify-center text-gray-400 text-sm">No data available for the selected range</div>
           )}
         </div>
       </div>
@@ -374,7 +335,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -393,30 +353,26 @@ export default function Dashboard() {
                   .slice(0, 5)
                   .map((invoice, index) => (
                     <tr key={invoice.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-2 text-sm text-gray-700">{index + 1}</td>
-                    <td className="py-3 px-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center text-xs font-semibold text-blue-600">
-                          📄
+                      <td className="py-3 px-2 text-sm text-gray-700">{index + 1}</td>
+                      <td className="py-3 px-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center text-xs font-semibold text-blue-600">📄</div>
+                          <span className="text-sm text-gray-900 font-medium">{invoice.invoiceNumber}</span>
                         </div>
-                        <span className="text-sm text-gray-900 font-medium">{invoice.invoiceNumber}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 text-sm text-gray-700">{invoice.clientName}</td>
-                    <td className="py-3 px-2 text-sm text-gray-900 font-semibold">{currencySymbol}{parseFloat(invoice.total).toFixed(2)}</td>
-                    <td className="py-3 px-2 text-xs text-gray-500">
-                      {invoice.issueDate || (invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString() : 'N/A')}
-                    </td>
-                    <td className="py-3 px-2">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${invoice.status === 'paid' ? 'bg-green-100 text-green-700' :
-                        invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3 px-2 text-sm text-gray-700">{invoice.clientName}</td>
+                      <td className="py-3 px-2 text-sm text-gray-900 font-semibold">₹{parseFloat(invoice.total).toFixed(2)}</td>
+                      <td className="py-3 px-2 text-xs text-gray-500">
+                        {new Date(invoice.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${invoice.status === 'paid' ? 'bg-green-100 text-green-700' :
+                          invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -437,21 +393,13 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Client Items */}
           <div className="space-y-3">
             {stats.recentInvoices && (() => {
-              // Get unique clients
-              // Get unique clients (filter out null/undefined)
-              const uniqueClients = [...new Set(stats.recentInvoices
-                .map(inv => inv.clientName)
-                .filter(name => name))];
-
+              const uniqueClients = [...new Set(stats.recentInvoices.map(inv => inv.clientName).filter(name => name))];
               return uniqueClients.slice(0, 5).map((clientName, index) => {
-                // Count invoices for this client
                 const clientInvoices = stats.recentInvoices.filter(inv => inv.clientName === clientName);
                 const invoiceCount = clientInvoices.length;
                 const totalAmount = clientInvoices.reduce((sum, inv) => sum + parseFloat(inv.total), 0);
-
                 return (
                   <div key={index} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors">
                     <div className="flex items-center gap-3">
@@ -465,7 +413,7 @@ export default function Dashboard() {
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500">Total</p>
-                      <p className="text-sm font-semibold text-gray-900">{currencySymbol}{totalAmount.toFixed(2)}</p>
+                      <p className="text-sm font-semibold text-gray-900">₹{totalAmount.toFixed(2)}</p>
                     </div>
                   </div>
                 );

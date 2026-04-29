@@ -28,13 +28,10 @@ const User = sequelize.define('User', {
   },
   businessName: {
     type: DataTypes.STRING,
-    allowNull: false,
-    field: 'business_name'
+    allowNull: false
   }
 }, {
   timestamps: true,
-  underscored: true,
-  tableName: 'users',
   hooks: {
     beforeCreate: async (user) => {
       if (user.password) {

@@ -6,16 +6,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/config/supabase";
 import { invoiceService } from "@/services/invoiceService";
-import { profileService } from "@/services/profileService";
-import { Calculator, Download, Filter, Receipt } from "lucide-react";
+import { Calculator, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
 export default function TaxReports() {
-  const { currencySymbol } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,7 +28,17 @@ export default function TaxReports() {
       // Parallel fetch for invoices and profile
       const [invoicesData, profileRes] = await Promise.all([
         invoiceService.getAll().then(res => res.data || []),
-        profileService.get().then(res => res.data)
+        supabase.auth.getUser().then(async ({ data: { user } }) => {
+          if (user) {
+            return supabase
+              .from('business_profiles')
+              .select('*')
+              .eq('user_id', user.id)
+              .single()
+              .then(res => res.data);
+          }
+          return null;
+        })
       ]);
 
       setInvoices(invoicesData);
@@ -211,7 +219,7 @@ export default function TaxReports() {
         <div className="glass rounded-2xl p-6 scale-in">
           <h3 className="text-sm font-medium text-gray-600 mb-2">Total Revenue</h3>
           <p className="text-3xl font-bold text-gray-800" data-testid="tax-total-revenue">
-            {currencySymbol}{selectedYearData.subtotal.toFixed(2)}
+            ₹{selectedYearData.subtotal.toFixed(2)}
           </p>
           <p className="text-xs text-gray-500 mt-1">{selectedYearData.count} invoices</p>
         </div>
@@ -219,7 +227,7 @@ export default function TaxReports() {
         <div className="glass rounded-2xl p-6 scale-in">
           <h3 className="text-sm font-medium text-gray-600 mb-2">Tax Collected</h3>
           <p className="text-3xl font-bold text-blue-600" data-testid="tax-collected">
-            {currencySymbol}{selectedYearData.tax.toFixed(2)}
+            ₹{selectedYearData.tax.toFixed(2)}
           </p>
           <p className="text-xs text-gray-500 mt-1">{selectedYearData.avgTaxRate.toFixed(2)}% average rate</p>
         </div>
@@ -235,7 +243,7 @@ export default function TaxReports() {
         <div className="glass rounded-2xl p-6">
           <h3 className="text-sm font-medium text-gray-600 mb-2">Remaining Balance</h3>
           <p className="text-3xl font-bold text-green-600" data-testid="tax-remaining">
-            {currencySymbol}{(selectedYearData.subtotal - selectedYearData.tax).toFixed(2)}
+            ₹{(selectedYearData.subtotal - selectedYearData.tax).toFixed(2)}
           </p>
           <p className="text-xs text-gray-500 mt-1">After tax collection</p>
         </div>
@@ -252,7 +260,7 @@ export default function TaxReports() {
               <YAxis stroke="#6b7280" />
               <Tooltip
                 contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
-                formatter={(value) => `${currencySymbol}${value.toFixed(2)}`}
+                formatter={(value) => `₹${value.toFixed(2)}`}
               />
               <Legend />
               <Bar dataKey="subtotal" fill="#0ea5e9" name="Subtotal" radius={[8, 8, 0, 0]} />
@@ -284,9 +292,9 @@ export default function TaxReports() {
                   <tr key={idx} className="border-b border-gray-100 hover:bg-white/50">
                     <td className="py-3 px-4 font-medium">{month.month}</td>
                     <td className="py-3 px-4 text-right">{month.count}</td>
-                    <td className="py-3 px-4 text-right font-semibold">{currencySymbol}{month.subtotal.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-semibold">₹{month.subtotal.toFixed(2)}</td>
                     <td className="py-3 px-4 text-right">{profile?.taxRate || 0}%</td>
-                    <td className="py-3 px-4 text-right font-semibold text-blue-600">{currencySymbol}{month.tax.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-blue-600">₹{month.tax.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -314,7 +322,7 @@ export default function TaxReports() {
             <strong>Reporting Period:</strong> Year {selectedYear}
           </p>
           <p>
-            <strong>Total Tax Collected:</strong> {currencySymbol}{selectedYearData.tax.toFixed(2)} across {selectedYearData.count} invoices
+            <strong>Total Tax Collected:</strong> ₹{selectedYearData.tax.toFixed(2)} across {selectedYearData.count} invoices
           </p>
           <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-sm text-blue-900">
