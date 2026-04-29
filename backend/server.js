@@ -13,7 +13,23 @@ const expenseRoutes = require('./routes/expenses');
 const dashboardRoutes = require('./routes/dashboard');
 const productRoutes = require('./routes/products');
 
+const fs = require('fs');
 const app = express();
+
+// Global error logging for production debugging
+process.on('uncaughtException', (err) => {
+  const msg = `\n[${new Date().toISOString()}] UNCAUGHT EXCEPTION: ${err.stack}\n`;
+  fs.appendFileSync(path.resolve(__dirname, 'server_error.log'), msg);
+  console.error(msg);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  const msg = `\n[${new Date().toISOString()}] UNHANDLED REJECTION: ${reason}\n`;
+  fs.appendFileSync(path.resolve(__dirname, 'server_error.log'), msg);
+  console.error(msg);
+});
+
 
 // CORS configuration - MUST come before other middleware
 app.use(cors({
@@ -45,10 +61,9 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// MySQL connection with Sequelize
 sequelize.authenticate()
   .then(() => {
-    console.log('Successfully connected to MySQL');
+    console.log(`Successfully connected to ${sequelize.getDialect()} database`);
     // Sync models with database (creates tables if they don't exist)
     return sequelize.sync({ alter: true });
   })
@@ -56,7 +71,10 @@ sequelize.authenticate()
     console.log('Database synchronized');
   })
   .catch((error) => {
-    console.error('MySQL connection error:', error);
+    console.error('❌ Database connection error!');
+    console.error('Dialect:', sequelize.getDialect());
+    console.error('Error details:', error.message);
+    if (error.original) console.error('Original error:', error.original.message);
     process.exit(1);
   });
 

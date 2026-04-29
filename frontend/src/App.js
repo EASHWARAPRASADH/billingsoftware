@@ -21,17 +21,8 @@ import TaxReports from "@/pages/TaxReports";
 
 // Protected Route Component
 function PrivateRoute({ children }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
-  return user ? children : <Navigate to="/auth" />;
+  // Bypassing auth: Always render children
+  return children;
 }
 
 // App Content Component

@@ -12,40 +12,14 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [profile, setProfile] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState({ id: 1, email: 'itsupport@technosprint.net' });
+    const [profile, setProfile] = useState({ businessName: 'Techno Sprint', currency: 'INR' });
+    const [loading, setLoading] = useState(false);
     const [currencySymbol, setCurrencySymbol] = useState('₹');
 
     useEffect(() => {
-        // Check for existing token and fetch user info
-        const initializeAuth = async () => {
-            const token = localStorage.getItem('token');
-            if (token) {
-                try {
-                    const response = await api.get('/auth/me');
-                    setUser(response.data);
-                    
-                    // Fetch Profile
-                    try {
-                        const profileResponse = await api.get('/profile');
-                        if (profileResponse.data) {
-                            setProfile(profileResponse.data);
-                            setCurrencySymbol(getSymbol(profileResponse.data.currency));
-                        }
-                    } catch (pErr) {
-                        console.error('Error fetching profile during init:', pErr);
-                    }
-                } catch (error) {
-                    console.error('Error fetching user info:', error);
-                    localStorage.removeItem('token');
-                    setUser(null);
-                }
-            }
-            setLoading(false);
-        };
-
-        initializeAuth();
+        // Auth is now removed/bypassed
+        setLoading(false);
     }, []);
 
     /**
